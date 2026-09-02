@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 const BASE_URL = "https://api.shovels.ai/v2";
@@ -122,12 +122,27 @@ function publicPermit(permit) {
   };
 }
 
+async function readExistingArtifact(output, slug) {
+  try {
+    const parsed = JSON.parse(await readFile(output, "utf8"));
+    return parsed && parsed.slug === slug ? parsed : null;
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw new Error(`Could not read existing incident artifact: ${error instanceof Error ? error.message : error}`);
+  }
+}
+
 async function main() {
   const apiKey = process.env.SHOVELS_API_KEY;
   if (!apiKey) throw new Error("SHOVELS_API_KEY is not set. Put it in .dev.vars.");
 
   const slug = required("slug");
   if (!/^[a-z0-9-]+$/.test(slug)) throw new Error("--slug must contain only lowercase letters, numbers, and hyphens");
+
+  const dataset = value("dataset", "recovery");
+  if (!new Set(["baseline", "recovery"]).has(dataset)) {
+    throw new Error("--dataset must be baseline or recovery");
+  }
 
   const geoId = required("geo-id");
   const allowBroadGeo = process.argv.includes("--allow-broad-geo");
@@ -162,8 +177,9 @@ async function main() {
   console.log(`Shovels credits: ${remaining}${limit == null ? "" : ` / ${limit}`} remaining`);
   if (parsedUsage.used != null) console.log(`Rolling usage: ${parsedUsage.used} credits`);
   console.log(`Protected reserve: ${reserve}`);
-  console.log(`Requested records: ${requestedLimit}`);
+  console.log(`Dataset: ${dataset}`);
   console.log(`Geography: ${geoId}`);
+  console.log(`Requested records: ${requestedLimit}`);
 
   if (effectiveLimit < 1) {
     throw new Error(`Sync refused: ${remaining} credits remain and ${reserve} are reserved.`);
@@ -190,29 +206,41 @@ async function main() {
   const consumed = headerInt(query.response, "X-Credits-Request") ?? items.length;
   const remainingAfter = headerInt(query.response, "X-Credits-Remaining");
 
-  const artifact = {
-    schemaVersion: 1,
-    slug,
+  const datasetArtifact = {
     updatedAt: new Date().toISOString(),
-    shovels: {
-      query: {
-        geoId,
-        permitFrom,
-        permitTo,
-        tags,
-        requestedSize: effectiveLimit,
-      },
-      permitCount: items.length,
-      nextCursor: query.body?.next_cursor ?? null,
-      permits: items.map(publicPermit),
+    query: {
+      geoId,
+      permitFrom,
+      permitTo,
+      tags,
+      requestedSize: effectiveLimit,
     },
+    permitCount: items.length,
+    nextCursor: query.body?.next_cursor ?? null,
+    permits: items.map(publicPermit),
   };
 
   const output = resolve("public", "data", "incidents", `${slug}.json`);
+  const existing = await readExistingArtifact(output, slug);
+  const existingDatasets = existing?.shovels?.datasets ?? {};
+  const artifact = {
+    ...(existing ?? {}),
+    schemaVersion: 2,
+    slug,
+    updatedAt: new Date().toISOString(),
+    shovels: {
+      ...(existing?.shovels ?? {}),
+      datasets: {
+        ...existingDatasets,
+        [dataset]: datasetArtifact,
+      },
+    },
+  };
+
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
 
-  console.log(`Wrote ${items.length} sanitized permit records to ${output}`);
+  console.log(`Wrote ${items.length} sanitized ${dataset} permit records to ${output}`);
   console.log(`Credits consumed: ${consumed}`);
   if (remainingAfter != null) console.log(`Credits remaining: ${remainingAfter}`);
 }
