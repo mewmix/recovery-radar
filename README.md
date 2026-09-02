@@ -79,23 +79,40 @@ Check the budget and arguments without consuming permit records:
 ```bash
 npm run ingest:shovels -- \
   --slug plaskett-2026 \
+  --dataset recovery \
   --geo-id 93920 \
   --from 2026-08-26 \
   --to 2026-09-01 \
   --dry-run
 ```
 
-For the first actual Plaskett enrichment, keep the sample intentionally small:
+Keep baseline and recovery data separately inside the same incident artifact. A tiny first baseline sample:
 
 ```bash
 npm run ingest:shovels -- \
   --slug plaskett-2026 \
+  --dataset baseline \
+  --geo-id 93920 \
+  --from 2025-08-26 \
+  --to 2026-08-25 \
+  --limit 10 \
+  --reserve 100
+```
+
+Then a tiny post-incident recovery sample:
+
+```bash
+npm run ingest:shovels -- \
+  --slug plaskett-2026 \
+  --dataset recovery \
   --geo-id 93920 \
   --from 2026-08-26 \
   --to 2026-09-01 \
   --limit 10 \
   --reserve 100
 ```
+
+Each dataset is merged into `shovels.datasets` instead of overwriting the other.
 
 A state-level query can still be run only when explicitly intended:
 
