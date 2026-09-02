@@ -1,7 +1,11 @@
 import { findCurrentFirePerimeter } from "./providers/wfigs";
 
+interface AssetBinding {
+  fetch(input: Request): Promise<Response>;
+}
+
 interface Env {
-  ASSETS: Fetcher;
+  ASSETS: AssetBinding;
 }
 
 function json(data: unknown, init: ResponseInit = {}): Response {
