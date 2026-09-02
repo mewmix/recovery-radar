@@ -1,0 +1,316 @@
+{
+  "schemaVersion": 2,
+  "slug": "plaskett-2026",
+  "updatedAt": "2026-09-02T05:37:26.311Z",
+  "shovels": {
+    "datasets": {
+      "baseline": {
+        "updatedAt": "2026-09-02T05:37:06.345Z",
+        "query": {
+          "geoId": "93920",
+          "permitFrom": "2025-08-26",
+          "permitTo": "2026-08-25",
+          "tags": [],
+          "requestedSize": 10
+        },
+        "permitCount": 10,
+        "nextCursor": "5Mu.NihjL-w0rB0",
+        "permits": [
+          {
+            "id": "1ac011d789ba2acf",
+            "status": "in_review",
+            "tags": [],
+            "jobValue": 0,
+            "contractorId": null,
+            "dates": {
+              "file": "2026-08-04",
+              "issue": null,
+              "start": "2026-08-04",
+              "end": "2026-08-04"
+            },
+            "location": {
+              "lat": 36.220762,
+              "lng": -121.7538,
+              "city": "BIG SUR",
+              "zip": "93920",
+              "state": "CA"
+            },
+            "geoIds": {
+              "address_id": "BEHijvJLLoI",
+              "city_id": "ROo2YnCzrpA",
+              "county_id": "xJKawO8ZlRM",
+              "jurisdiction_id": "hP97uiO2AjA"
+            }
+          },
+          {
+            "id": "83fa28c6f61685b5",
+            "status": "final",
+            "tags": [],
+            "jobValue": 0,
+            "contractorId": null,
+            "dates": {
+              "file": "2026-07-31",
+              "issue": null,
+              "start": "2026-07-31",
+              "end": "2026-07-31"
+            },
+            "location": {
+              "lat": 36.220762,
+              "lng": -121.7538,
+              "city": "BIG SUR",
+              "zip": "93920",
+              "state": "CA"
+            },
+            "geoIds": {
+              "address_id": "BEHijvJLLoI",
+              "city_id": "ROo2YnCzrpA",
+              "county_id": "xJKawO8ZlRM",
+              "jurisdiction_id": "hP97uiO2AjA"
+            }
+          },
+          {
+            "id": "a3bfd946ab79181e",
+            "status": "in_review",
+            "tags": [
+              "electrical",
+              "ev_charger",
+              "grading",
+              "new_construction"
+            ],
+            "jobValue": 0,
+            "contractorId": "0qXtrBUW3b",
+            "dates": {
+              "file": "2026-07-24",
+              "issue": null,
+              "start": "2026-07-24",
+              "end": "2026-07-24"
+            },
+            "location": {
+              "lat": null,
+              "lng": null,
+              "city": "BIG SUR",
+              "zip": "93920",
+              "state": "CA"
+            },
+            "geoIds": {
+              "address_id": "BEFYsSY_B-4",
+              "city_id": "ROo2YnCzrpA",
+              "county_id": "xJKawO8ZlRM",
+              "jurisdiction_id": "hP97uiO2AjA"
+            }
+          },
+          {
+            "id": "61e0d0eb11de9763",
+            "status": "active",
+            "tags": [
+              "hvac"
+            ],
+            "jobValue": 690000,
+            "contractorId": "scMAJvJW6I",
+            "dates": {
+              "file": "2026-07-22",
+              "issue": "2026-08-18",
+              "start": "2026-07-22",
+              "end": "2026-08-18"
+            },
+            "location": {
+              "lat": 36.245603,
+              "lng": -121.791923,
+              "city": "BIG SUR",
+              "zip": "93920",
+              "state": "CA"
+            },
+            "geoIds": {
+              "address_id": "BOLE2cz6MNM",
+              "city_id": "ROo2YnCzrpA",
+              "county_id": "xJKawO8ZlRM",
+              "jurisdiction_id": "hP97uiO2AjA"
+            }
+          },
+          {
+            "id": "bb4df9c0dc949e39",
+            "status": "final",
+            "tags": [
+              "hvac"
+            ],
+            "jobValue": 0,
+            "contractorId": null,
+            "dates": {
+              "file": "2026-07-22",
+              "issue": null,
+              "start": "2026-07-22",
+              "end": "2026-08-04"
+            },
+            "location": {
+              "lat": 36.245603,
+              "lng": -121.791923,
+              "city": "BIG SUR",
+              "zip": "93920",
+              "state": "CA"
+            },
+            "geoIds": {
+              "address_id": "BOLE2cz6MNM",
+              "city_id": "ROo2YnCzrpA",
+              "county_id": "xJKawO8ZlRM",
+              "jurisdiction_id": "hP97uiO2AjA"
+            }
+          },
+          {
+            "id": "ebde2b6baf54e387",
+            "status": "active",
+            "tags": [
+              "roofing"
+            ],
+            "jobValue": 3292100,
+            "contractorId": "k8WnMjMsAs",
+            "dates": {
+              "file": "2026-07-17",
+              "issue": "2026-08-03",
+              "start": "2026-07-17",
+              "end": "2026-08-03"
+            },
+            "location": {
+              "lat": 36.228061,
+              "lng": -121.760533,
+              "city": "BIG SUR",
+              "zip": "93920",
+              "state": "CA"
+            },
+            "geoIds": {
+              "address_id": "BI6X_foK1ck",
+              "city_id": "ROo2YnCzrpA",
+              "county_id": "xJKawO8ZlRM",
+              "jurisdiction_id": "hP97uiO2AjA"
+            }
+          },
+          {
+            "id": "b331ef2ce8659fcc",
+            "status": "final",
+            "tags": [],
+            "jobValue": 0,
+            "contractorId": null,
+            "dates": {
+              "file": "2026-07-16",
+              "issue": null,
+              "start": "2026-07-16",
+              "end": "2026-07-16"
+            },
+            "location": {
+              "lat": 36.220762,
+              "lng": -121.7538,
+              "city": "BIG SUR",
+              "zip": "93920",
+              "state": "CA"
+            },
+            "geoIds": {
+              "address_id": "BEHijvJLLoI",
+              "city_id": "ROo2YnCzrpA",
+              "county_id": "xJKawO8ZlRM",
+              "jurisdiction_id": "hP97uiO2AjA"
+            }
+          },
+          {
+            "id": "3580a20ca603c434",
+            "status": "in_review",
+            "tags": [
+              "electrical",
+              "ev_charger"
+            ],
+            "jobValue": 25600000,
+            "contractorId": null,
+            "dates": {
+              "file": "2026-07-07",
+              "issue": null,
+              "start": "2026-07-07",
+              "end": "2026-07-07"
+            },
+            "location": {
+              "lat": 36.228061,
+              "lng": -121.760533,
+              "city": "BIG SUR",
+              "zip": "93920",
+              "state": "CA"
+            },
+            "geoIds": {
+              "address_id": "BI6X_foK1ck",
+              "city_id": "ROo2YnCzrpA",
+              "county_id": "xJKawO8ZlRM",
+              "jurisdiction_id": "hP97uiO2AjA"
+            }
+          },
+          {
+            "id": "3a50b0615d3faa36",
+            "status": "final",
+            "tags": [
+              "electrical",
+              "ev_charger"
+            ],
+            "jobValue": 0,
+            "contractorId": null,
+            "dates": {
+              "file": "2026-07-07",
+              "issue": null,
+              "start": "2026-07-07",
+              "end": "2026-07-09"
+            },
+            "location": {
+              "lat": 36.228061,
+              "lng": -121.760533,
+              "city": "BIG SUR",
+              "zip": "93920",
+              "state": "CA"
+            },
+            "geoIds": {
+              "address_id": "BI6X_foK1ck",
+              "city_id": "ROo2YnCzrpA",
+              "county_id": "xJKawO8ZlRM",
+              "jurisdiction_id": "hP97uiO2AjA"
+            }
+          },
+          {
+            "id": "3628632fec34ac1d",
+            "status": "active",
+            "tags": [
+              "electrical",
+              "ev_charger"
+            ],
+            "jobValue": 200000,
+            "contractorId": null,
+            "dates": {
+              "file": "2026-07-06",
+              "issue": "2026-07-22",
+              "start": "2026-07-06",
+              "end": "2026-07-22"
+            },
+            "location": {
+              "lat": 36.232302,
+              "lng": -121.752991,
+              "city": "BIG SUR",
+              "zip": "93920",
+              "state": "CA"
+            },
+            "geoIds": {
+              "address_id": "BLy9ERojKe4",
+              "city_id": "ROo2YnCzrpA",
+              "county_id": "xJKawO8ZlRM",
+              "jurisdiction_id": "hP97uiO2AjA"
+            }
+          }
+        ]
+      },
+      "recovery": {
+        "updatedAt": "2026-09-02T05:37:26.310Z",
+        "query": {
+          "geoId": "93920",
+          "permitFrom": "2026-08-26",
+          "permitTo": "2026-09-01",
+          "tags": [],
+          "requestedSize": 10
+        },
+        "permitCount": 0,
+        "nextCursor": null,
+        "permits": []
+      }
+    }
+  }
+}
