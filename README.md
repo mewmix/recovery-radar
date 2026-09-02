@@ -70,27 +70,43 @@ SHOVELS_API_KEY=your_key_here
 
 ## Credit-safe Shovels ingestion
 
-Check the budget without consuming permit records:
+Shovels accepts a state code, ZIP code, or Shovels address/city/county/jurisdiction geolocation ID as `geo_id`. Prefer the narrowest useful geography. The CLI refuses a two-letter state code by default so a typo cannot spend credits on an arbitrary statewide sample.
+
+For the Plaskett Fire, ZIP **93920** covers the Big Sur/Gorda/Lucia/Pacific Valley area and is the initial candidate geography.
+
+Check the budget and arguments without consuming permit records:
 
 ```bash
 npm run ingest:shovels -- \
   --slug plaskett-2026 \
-  --geo-id CA \
+  --geo-id 93920 \
   --from 2026-08-26 \
   --to 2026-09-01 \
   --dry-run
 ```
 
-Run an ingestion:
+For the first actual Plaskett enrichment, keep the sample intentionally small:
 
 ```bash
 npm run ingest:shovels -- \
   --slug plaskett-2026 \
+  --geo-id 93920 \
+  --from 2026-08-26 \
+  --to 2026-09-01 \
+  --limit 10 \
+  --reserve 100
+```
+
+A state-level query can still be run only when explicitly intended:
+
+```bash
+npm run ingest:shovels -- \
+  --slug california-sample \
   --geo-id CA \
   --from 2026-08-26 \
   --to 2026-09-01 \
-  --limit 25 \
-  --reserve 100
+  --limit 10 \
+  --allow-broad-geo
 ```
 
 Defaults are deliberately conservative: `25` records maximum per sync and `100` credits protected as reserve. The CLI checks `GET /v2/usage` first and refuses to query permits if it cannot verify the remaining balance.
