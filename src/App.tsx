@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { IncidentMap, type FirePerimeter, type PermitMapPoint } from "./IncidentMap";
+import { classifySiteExposure } from "./geo";
 
 type Permit = {
   id?: string | null;
@@ -77,6 +78,8 @@ const INCIDENT = {
   geoId: "93920",
 };
 
+const NEAR_THRESHOLD_KM = 5;
+
 function formatWindow(dataset?: Dataset): string {
   const from = dataset?.query?.permitFrom;
   const to = dataset?.query?.permitTo;
@@ -85,6 +88,11 @@ function formatWindow(dataset?: Dataset): string {
 
 function formatNumber(value?: number): string {
   return value == null ? "—" : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatKm(value?: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value)} km`;
 }
 
 function formatMoney(value?: number): string {
@@ -220,12 +228,17 @@ export function App() {
   const baselineCount = baseline?.permitCount;
   const recoveryMatches = recovery?.totalMatches;
   const acres = perimeter?.acres;
-  const containment = perimeter?.containmentPct;
   const mappedStructures = buildingImpact?.exposure?.mappedStructureCount;
 
   const baselineSummary = useMemo(() => {
     const siteKeys = new Set(baselinePermits.map(siteKey));
-    const mappedSites = uniqueMappedSites(baselinePermits);
+    const rawMappedSites = uniqueMappedSites(baselinePermits);
+    const mappedSites = perimeter
+      ? rawMappedSites.map((site) => ({
+          ...site,
+          ...classifySiteExposure(site.lng, site.lat, perimeter.geometry, NEAR_THRESHOLD_KM),
+        }))
+      : rawMappedSites;
     const statedValues = baselinePermits.map((permit) => permit.jobValue ?? 0).filter((value) => value > 0);
     const statedValue = statedValues.reduce((sum, value) => sum + value, 0);
     const largestValue = statedValues.length ? Math.max(...statedValues) : 0;
@@ -238,6 +251,15 @@ export function App() {
       for (const tag of permit.tags ?? []) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
     }
     const dominantTags = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const insideSites = mappedSites.filter((site) => site.exposure === "inside");
+    const nearSites = mappedSites.filter((site) => site.exposure === "near");
+    const outsideSites = mappedSites.filter((site) => site.exposure === "outside");
+    const distances = mappedSites
+      .map((site) => site.distanceKm)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    const nearestDistanceKm = distances.length ? Math.min(...distances) : null;
+    const exposedSites = [...insideSites, ...nearSites];
+    const exposedObservedValue = exposedSites.reduce((sum, site) => sum + Math.max(0, site.jobValue ?? 0), 0);
 
     return {
       distinctSites: siteKeys.size,
@@ -249,14 +271,26 @@ export function App() {
       approvalSampleSize: approvalDays.length,
       knownContractors: contractors.size,
       dominantTags,
+      insideSites: insideSites.length,
+      nearSites: nearSites.length,
+      outsideSites: outsideSites.length,
+      exposedSites: exposedSites.length,
+      nearestDistanceKm,
+      exposedObservedValue,
     };
-  }, [baselinePermits]);
+  }, [baselinePermits, perimeter]);
 
   const recoveryLabel = recoveryCount === 0
     ? "No matching permits observed"
     : recoveryCount == null
       ? "Awaiting recovery snapshot"
       : `${recoveryCount} observed permit${recoveryCount === 1 ? "" : "s"}`;
+
+  const siteExposureHeadline = perimeterState !== "ready" || baselineCount == null
+    ? "Classifying sampled pre-fire activity…"
+    : baselineSummary.exposedSites > 0
+      ? `${baselineSummary.exposedSites} sampled pre-fire site${baselineSummary.exposedSites === 1 ? " is" : "s are"} inside or within ${NEAR_THRESHOLD_KM} km of the perimeter.`
+      : `No sampled pre-fire sites fall inside or within ${NEAR_THRESHOLD_KM} km of the perimeter.`;
 
   const metrics = useMemo(() => {
     if (mode === "Recovery") {
@@ -279,12 +313,12 @@ export function App() {
     }
 
     return [
-      { label: "Incident perimeter", value: acres == null ? "—" : `${formatNumber(acres)} ac`, note: perimeterState === "ready" ? "Live WFIGS polygon acreage" : "Resolving perimeter" },
-      { label: "Mapped structures exposed", value: mappedStructures == null ? "—" : formatNumber(mappedStructures), note: buildingState === "ready" ? "Monterey County footprints intersecting perimeter" : "Resolving county GIS" },
-      { label: "Baseline sites mapped", value: baselineCount == null ? "—" : `${baselineSummary.mappedSites.length}/${baselineSummary.distinctSites}`, note: "Unique Shovels sites; one cached site lacks coordinates" },
-      { label: "Post-fire permit activity", value: recoveryCount == null ? "—" : String(recoveryCount), note: recoveryMatches != null ? `${formatNumber(recoveryMatches)} total matches in cached query` : recoveryLabel },
+      { label: "Mapped structures exposed", value: mappedStructures == null ? "—" : formatNumber(mappedStructures), note: buildingState === "ready" ? "County footprints intersecting live perimeter" : "Resolving county GIS" },
+      { label: "Pre-fire sites inside", value: perimeterState !== "ready" ? "—" : String(baselineSummary.insideSites), note: `${baselineSummary.mappedSites.length} geocoded sampled sites classified` },
+      { label: `Pre-fire sites ≤${NEAR_THRESHOLD_KM} km`, value: perimeterState !== "ready" ? "—" : String(baselineSummary.nearSites), note: "Near excludes sites already inside the perimeter" },
+      { label: "Nearest sampled activity", value: perimeterState !== "ready" ? "—" : formatKm(baselineSummary.nearestDistanceKm), note: baselineSummary.insideSites > 0 ? "At least one sampled site is inside the perimeter" : "Distance to current perimeter boundary" },
     ];
-  }, [acres, baselineCount, baselineSummary, buildingState, mappedStructures, mode, perimeterState, recovery, recoveryCount, recoveryLabel, recoveryMatches]);
+  }, [baselineCount, baselineSummary, buildingState, mappedStructures, mode, perimeterState, recovery, recoveryCount, recoveryLabel]);
 
   return (
     <main className="shell">
@@ -303,7 +337,7 @@ export function App() {
             <span className="eyebrow">ACTIVE INCIDENT · {INCIDENT.county.toUpperCase()}</span>
             <strong>{perimeter?.name ?? INCIDENT.name}</strong>
             <p>
-              Started {formatDate(perimeter?.discoveredAt)}. The perimeter is live from WFIGS; white points are deduplicated pre-fire Shovels sites from the cached sample.
+              Started {formatDate(perimeter?.discoveredAt)}. Sampled pre-fire sites are classified against the live perimeter: red is inside, amber is within {NEAR_THRESHOLD_KM} km, white is outside.
               {mappedStructures != null ? ` ${formatNumber(mappedStructures)} mapped building footprints intersect the current perimeter.` : acres != null ? ` ${formatNumber(acres)} acres are represented by the incident geometry.` : ""}
             </p>
           </div>
@@ -311,9 +345,9 @@ export function App() {
 
         <aside className="incident-card">
           <span className="eyebrow">OBSERVATION STATE</span>
-          <h2>{mappedStructures != null ? `${formatNumber(mappedStructures)} mapped structures intersect the fire perimeter.` : perimeterState === "ready" ? "The incident surface is live." : "Incident intelligence is coming online."}</h2>
+          <h2>{siteExposureHeadline}</h2>
           <ol>
-            <li><b>01</b><span><strong>Impact</strong>{mappedStructures != null ? "Live perimeter × county building footprints. Exposure proxy only; not confirmed damage." : "Resolve what exists inside the incident perimeter."}</span></li>
+            <li><b>01</b><span><strong>Impact</strong>{mappedStructures != null ? `${formatNumber(mappedStructures)} mapped structures intersect the perimeter; ${baselineSummary.exposedSites} sampled pre-fire sites are inside/near it.` : "Resolve what exists inside and near the incident perimeter."}</span></li>
             <li><b>02</b><span><strong>Recovery</strong>{recoveryLabel}. Absence is reported as observation, not fact.</span></li>
             <li><b>03</b><span><strong>Capacity</strong>{baselineCount != null ? `${baselineCount} permit rows resolve to ${baselineSummary.distinctSites} distinct pre-fire sites.` : "Compare emerging rebuild demand against normal local throughput."}</span></li>
           </ol>
@@ -340,15 +374,15 @@ export function App() {
       <section className="evidence-panel">
         <div>
           <span className="eyebrow">EVIDENCE MODE</span>
-          <strong>{mode === "Impact" && perimeterState === "ready" ? "Live incident + public structure evidence" : snapshotState === "ready" ? "Cached Shovels snapshot loaded" : snapshotState === "loading" ? "Loading cached evidence…" : "No committed Shovels snapshot found yet"}</strong>
+          <strong>{mode === "Impact" && perimeterState === "ready" ? "Live perimeter + sampled activity proximity" : snapshotState === "ready" ? "Cached Shovels snapshot loaded" : snapshotState === "loading" ? "Loading cached evidence…" : "No committed Shovels snapshot found yet"}</strong>
         </div>
         <div className="evidence-facts">
           {mode === "Impact" ? (
             <>
               <span><b>Perimeter source</b> WFIGS Interagency Perimeters · updated {formatDate(perimeter?.perimeterUpdatedAt)}</span>
               <span><b>Structure source</b> Monterey County Building Footprints · {buildingImpact?.exposure?.datasetVintage ?? "2010 LiDAR-derived"}</span>
-              <span><b>Baseline mapping</b> {baselineSummary.distinctSites || "—"} distinct sites identified; {baselineSummary.mappedSites.length || "—"} geocoded and mapped.</span>
-              <span><b>Interpretation</b> Spatial intersection is an exposure proxy. Dataset age and perimeter uncertainty mean this is not a damage count.</span>
+              <span><b>Sampled site classification</b> {baselineSummary.insideSites} inside · {baselineSummary.nearSites} within {NEAR_THRESHOLD_KM} km · {baselineSummary.outsideSites} outside · {baselineSummary.distinctSites - baselineSummary.mappedSites.length} unmapped.</span>
+              <span><b>Nearest sampled activity</b> {baselineSummary.insideSites > 0 ? "Inside current perimeter" : formatKm(baselineSummary.nearestDistanceKm)}. Proximity is not confirmed fire impact or damage.</span>
             </>
           ) : mode === "Capacity" ? (
             <>
@@ -370,7 +404,7 @@ export function App() {
 
       <footer>
         <span>WFIGS + county GIS → impact · cached Shovels → recovery/capacity</span>
-        <span>Exposure ≠ damage · permit rows ≠ projects · absence ≠ proof</span>
+        <span>Exposure ≠ damage · proximity ≠ impact · permit rows ≠ projects</span>
       </footer>
     </main>
   );
