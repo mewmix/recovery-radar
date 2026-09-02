@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "npm run build && vite preview",
+    "deploy:first": "npm run build && wrangler deploy --secrets-file .dev.vars",
     "deploy": "npm run build && wrangler deploy",
     "check": "tsc --noEmit && vite build && wrangler deploy --dry-run",
     "ingest:shovels": "node --env-file=.dev.vars scripts/ingest-shovels.mjs"
