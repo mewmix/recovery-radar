@@ -7,6 +7,14 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
+  "kv_namespaces": [
+    {
+      "binding": "RECOVERY_STATE"
+    }
+  ],
+  "triggers": {
+    "crons": ["15 15 * * *"]
+  },
   "observability": {
     "enabled": true
   }
