@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import maplibregl, { LngLatBounds, type GeoJSONSource, type Map as MapLibreMap } from "maplibre-gl";
 import type { FeatureCollection, MultiPolygon, Point, Polygon, Position } from "geojson";
+import type { ExposureClass } from "./geo";
 
 export type FirePerimeter = {
   id: string;
@@ -22,6 +23,8 @@ export type PermitMapPoint = {
   status?: string | null;
   tags?: string[];
   jobValue?: number | null;
+  exposure?: ExposureClass;
+  distanceKm?: number;
 };
 
 type Props = {
@@ -50,11 +53,16 @@ function coordinates(geometry: Polygon | MultiPolygon): Position[] {
   return output;
 }
 
-function boundsFor(geometry: Polygon | MultiPolygon): LngLatBounds | null {
-  const points = coordinates(geometry);
-  if (!points.length) return null;
-  const first: [number, number] = [points[0][0], points[0][1]];
-  return points.reduce((bounds, point) => bounds.extend([point[0], point[1]]), new LngLatBounds(first, first));
+function combinedBounds(perimeter: FirePerimeter | null, points: PermitMapPoint[]): LngLatBounds | null {
+  const perimeterPoints = perimeter ? coordinates(perimeter.geometry) : [];
+  const all = [
+    ...perimeterPoints.map((point) => [point[0], point[1]] as [number, number]),
+    ...points.map((point) => [point.lng, point.lat] as [number, number]),
+  ];
+  if (!all.length) return null;
+  const bounds = new LngLatBounds(all[0], all[0]);
+  for (const point of all.slice(1)) bounds.extend(point);
+  return bounds;
 }
 
 function baselineGeoJson(points: PermitMapPoint[]): FeatureCollection<Point> {
@@ -68,6 +76,8 @@ function baselineGeoJson(points: PermitMapPoint[]): FeatureCollection<Point> {
         status: point.status ?? "unknown",
         tags: (point.tags ?? []).join(", "),
         jobValue: point.jobValue ?? 0,
+        exposure: point.exposure ?? "outside",
+        distanceKm: point.distanceKm ?? null,
       },
     })),
   };
@@ -136,13 +146,13 @@ export function IncidentMap({ perimeter, state, baselinePermits = [] }: Props) {
         });
       }
 
-      const bounds = boundsFor(perimeter.geometry);
-      if (bounds) map.fitBounds(bounds, { padding: 54, maxZoom: 12, duration: 900 });
+      const bounds = combinedBounds(perimeter, baselinePermits);
+      if (bounds) map.fitBounds(bounds, { padding: 64, maxZoom: 12, duration: 900 });
     };
 
     if (map.loaded()) apply();
     else map.once("load", apply);
-  }, [perimeter]);
+  }, [perimeter, baselinePermits]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -160,26 +170,52 @@ export function IncidentMap({ perimeter, state, baselinePermits = [] }: Props) {
           type: "circle",
           source: BASELINE_SOURCE_ID,
           paint: {
-            "circle-radius": 5,
-            "circle-color": "#f3f5f7",
+            "circle-radius": ["match", ["get", "exposure"], "inside", 7, "near", 6, 5],
+            "circle-color": [
+              "match",
+              ["get", "exposure"],
+              "inside", "#ff5d45",
+              "near", "#f2c94c",
+              "#f3f5f7",
+            ],
             "circle-stroke-color": "#090b0d",
             "circle-stroke-width": 1.5,
-            "circle-opacity": 0.92,
+            "circle-opacity": 0.95,
           },
         });
+
+        map.on("mouseenter", BASELINE_LAYER_ID, () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", BASELINE_LAYER_ID, () => { map.getCanvas().style.cursor = ""; });
+        map.on("click", BASELINE_LAYER_ID, (event) => {
+          const feature = event.features?.[0];
+          if (!feature || feature.geometry.type !== "Point") return;
+          const properties = feature.properties ?? {};
+          const distance = Number(properties.distanceKm);
+          const exposure = String(properties.exposure ?? "outside").toUpperCase();
+          const distanceText = Number.isFinite(distance)
+            ? exposure === "INSIDE" ? "inside current perimeter" : `${distance.toFixed(1)} km from perimeter`
+            : "distance unavailable";
+          new maplibregl.Popup({ closeButton: false, offset: 9 })
+            .setLngLat(feature.geometry.coordinates as [number, number])
+            .setText(`${exposure} · ${distanceText}`)
+            .addTo(map);
+        });
       }
+
+      const bounds = combinedBounds(perimeter, baselinePermits);
+      if (bounds) map.fitBounds(bounds, { padding: 64, maxZoom: 12, duration: 700 });
     };
 
     if (map.loaded()) apply();
     else map.once("load", apply);
-  }, [baselinePermits]);
+  }, [baselinePermits, perimeter]);
 
   return (
     <div className="incident-map-wrap">
-      <div ref={containerRef} className="incident-map" aria-label="Interactive Plaskett Fire perimeter map" />
+      <div ref={containerRef} className="incident-map" aria-label="Interactive Plaskett Fire perimeter and baseline activity map" />
       <div className={`map-state map-state-${state}`}>
         <span className="map-state-dot" />
-        {state === "ready" ? "WFIGS perimeter live" : state === "loading" ? "Resolving WFIGS perimeter…" : "Perimeter unavailable"}
+        {state === "ready" ? "WFIGS perimeter live · site proximity classified" : state === "loading" ? "Resolving WFIGS perimeter…" : "Perimeter unavailable"}
       </div>
     </div>
   );
