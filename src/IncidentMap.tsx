@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import maplibregl, { LngLatBounds, type GeoJSONSource, type Map as MapLibreMap } from "maplibre-gl";
-import type { MultiPolygon, Polygon, Position } from "geojson";
+import type { FeatureCollection, MultiPolygon, Point, Polygon, Position } from "geojson";
 
 export type FirePerimeter = {
   id: string;
@@ -15,14 +15,26 @@ export type FirePerimeter = {
   source: "wfigs";
 };
 
+export type PermitMapPoint = {
+  id: string;
+  lat: number;
+  lng: number;
+  status?: string | null;
+  tags?: string[];
+  jobValue?: number | null;
+};
+
 type Props = {
   perimeter: FirePerimeter | null;
   state: "loading" | "ready" | "missing";
+  baselinePermits?: PermitMapPoint[];
 };
 
 const SOURCE_ID = "incident-perimeter";
 const FILL_LAYER_ID = "incident-perimeter-fill";
 const LINE_LAYER_ID = "incident-perimeter-line";
+const BASELINE_SOURCE_ID = "baseline-permits";
+const BASELINE_LAYER_ID = "baseline-permits-circle";
 
 function coordinates(geometry: Polygon | MultiPolygon): Position[] {
   const output: Position[] = [];
@@ -45,7 +57,23 @@ function boundsFor(geometry: Polygon | MultiPolygon): LngLatBounds | null {
   return points.reduce((bounds, point) => bounds.extend([point[0], point[1]]), new LngLatBounds(first, first));
 }
 
-export function IncidentMap({ perimeter, state }: Props) {
+function baselineGeoJson(points: PermitMapPoint[]): FeatureCollection<Point> {
+  return {
+    type: "FeatureCollection",
+    features: points.map((point) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [point.lng, point.lat] },
+      properties: {
+        id: point.id,
+        status: point.status ?? "unknown",
+        tags: (point.tags ?? []).join(", "),
+        jobValue: point.jobValue ?? 0,
+      },
+    })),
+  };
+}
+
+export function IncidentMap({ perimeter, state, baselinePermits = [] }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
 
@@ -115,6 +143,36 @@ export function IncidentMap({ perimeter, state }: Props) {
     if (map.loaded()) apply();
     else map.once("load", apply);
   }, [perimeter]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const data = baselineGeoJson(baselinePermits);
+    const apply = () => {
+      const source = map.getSource(BASELINE_SOURCE_ID) as GeoJSONSource | undefined;
+      if (source) {
+        source.setData(data);
+      } else {
+        map.addSource(BASELINE_SOURCE_ID, { type: "geojson", data });
+        map.addLayer({
+          id: BASELINE_LAYER_ID,
+          type: "circle",
+          source: BASELINE_SOURCE_ID,
+          paint: {
+            "circle-radius": 5,
+            "circle-color": "#f3f5f7",
+            "circle-stroke-color": "#090b0d",
+            "circle-stroke-width": 1.5,
+            "circle-opacity": 0.92,
+          },
+        });
+      }
+    };
+
+    if (map.loaded()) apply();
+    else map.once("load", apply);
+  }, [baselinePermits]);
 
   return (
     <div className="incident-map-wrap">
