@@ -1,0 +1,86 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f4f5f6;
+  background: #090b0d;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: #090b0d; }
+button { font: inherit; }
+
+.shell {
+  width: min(1500px, 100%);
+  margin: 0 auto;
+  padding: 28px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
+  align-items: end;
+  padding: 16px 0 34px;
+  border-bottom: 1px solid #24282c;
+}
+
+.eyebrow {
+  display: block;
+  color: #8f979e;
+  font: 600 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .13em;
+}
+
+h1 { margin: 8px 0 0; max-width: 780px; font-size: clamp(28px, 4vw, 56px); line-height: .98; letter-spacing: -.045em; }
+.status { color: #aeb4b9; font-size: 13px; white-space: nowrap; }
+.status i { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: #a9efba; box-shadow: 0 0 16px #a9efba77; }
+
+.hero-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, .75fr); gap: 12px; padding: 12px 0; }
+.map-stage, .incident-card, .metrics article { border: 1px solid #24282c; background: #0d1013; }
+
+.map-stage { position: relative; min-height: 520px; overflow: hidden; }
+.map-grid { position: absolute; inset: 0; opacity: .37; background-image: linear-gradient(#23282d 1px, transparent 1px), linear-gradient(90deg, #23282d 1px, transparent 1px); background-size: 44px 44px; transform: perspective(700px) rotateX(58deg) scale(1.45) translateY(-5%); transform-origin: center; }
+.map-stage::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 54% 52%, transparent 0 10%, #090b0d00 28%, #090b0dd9 82%); }
+.map-copy { position: absolute; z-index: 2; left: 30px; bottom: 28px; max-width: 520px; }
+.map-copy strong { display: block; margin: 9px 0 10px; font-size: 32px; letter-spacing: -.035em; }
+.map-copy p { margin: 0; color: #9ca4aa; line-height: 1.55; }
+.crosshair { position: absolute; z-index: 2; left: 54%; top: 46%; width: 72px; height: 72px; border: 1px solid #788087; border-radius: 50%; transform: translate(-50%, -50%); }
+.crosshair::before, .crosshair::after { content: ""; position: absolute; background: #788087; }
+.crosshair::before { width: 110px; height: 1px; left: -20px; top: 35px; }
+.crosshair::after { width: 1px; height: 110px; top: -20px; left: 35px; }
+
+.incident-card { padding: 28px; }
+.incident-card h2 { margin: 14px 0 35px; font-size: 30px; line-height: 1.08; letter-spacing: -.035em; }
+.incident-card ol { list-style: none; margin: 0; padding: 0; }
+.incident-card li { display: grid; grid-template-columns: 38px 1fr; gap: 12px; padding: 20px 0; border-top: 1px solid #24282c; }
+.incident-card li b { color: #596168; font: 500 12px ui-monospace, monospace; }
+.incident-card li strong { display: block; margin-bottom: 5px; font-size: 15px; }
+.incident-card li span { color: #8f979e; font-size: 13px; line-height: 1.4; }
+
+.tabs { display: flex; align-items: center; gap: 6px; padding: 12px 0; }
+.tabs button { border: 1px solid #24282c; background: transparent; color: #899198; padding: 9px 15px; cursor: default; }
+.tabs button.active { background: #f0f2f3; color: #0a0c0e; border-color: #f0f2f3; }
+.tabs span { margin-left: auto; color: #60686e; font-size: 12px; }
+
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.metrics article { padding: 22px; min-height: 150px; display: flex; flex-direction: column; }
+.metrics span { color: #8e969c; font-size: 12px; }
+.metrics strong { margin-top: auto; font-size: 36px; font-weight: 550; }
+.metrics small { margin-top: 5px; color: #596168; }
+
+footer { display: flex; justify-content: space-between; gap: 20px; padding: 18px 2px; color: #545c62; font: 500 11px ui-monospace, monospace; }
+
+@media (max-width: 900px) {
+  .shell { padding: 18px; }
+  .topbar { align-items: start; flex-direction: column; }
+  .hero-grid { grid-template-columns: 1fr; }
+  .map-stage { min-height: 430px; }
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .tabs span { display: none; }
+}
+
+@media (max-width: 540px) {
+  .metrics { grid-template-columns: 1fr; }
+  .map-stage { min-height: 380px; }
+  footer { flex-direction: column; }
+}
