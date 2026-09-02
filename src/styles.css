@@ -36,12 +36,12 @@ h1 { margin: 8px 0 0; max-width: 780px; font-size: clamp(28px, 4vw, 56px); line-
 .status i { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: #a9efba; box-shadow: 0 0 16px #a9efba77; }
 
 .hero-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, .75fr); gap: 12px; padding: 12px 0; }
-.map-stage, .incident-card, .metrics article { border: 1px solid #24282c; background: #0d1013; }
+.map-stage, .incident-card, .metrics article, .evidence-panel { border: 1px solid #24282c; background: #0d1013; }
 
 .map-stage { position: relative; min-height: 520px; overflow: hidden; }
 .map-grid { position: absolute; inset: 0; opacity: .37; background-image: linear-gradient(#23282d 1px, transparent 1px), linear-gradient(90deg, #23282d 1px, transparent 1px); background-size: 44px 44px; transform: perspective(700px) rotateX(58deg) scale(1.45) translateY(-5%); transform-origin: center; }
 .map-stage::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 54% 52%, transparent 0 10%, #090b0d00 28%, #090b0dd9 82%); }
-.map-copy { position: absolute; z-index: 2; left: 30px; bottom: 28px; max-width: 520px; }
+.map-copy { position: absolute; z-index: 2; left: 30px; bottom: 28px; max-width: 580px; }
 .map-copy strong { display: block; margin: 9px 0 10px; font-size: 32px; letter-spacing: -.035em; }
 .map-copy p { margin: 0; color: #9ca4aa; line-height: 1.55; }
 .crosshair { position: absolute; z-index: 2; left: 54%; top: 46%; width: 72px; height: 72px; border: 1px solid #788087; border-radius: 50%; transform: translate(-50%, -50%); }
@@ -58,15 +58,28 @@ h1 { margin: 8px 0 0; max-width: 780px; font-size: clamp(28px, 4vw, 56px); line-
 .incident-card li span { color: #8f979e; font-size: 13px; line-height: 1.4; }
 
 .tabs { display: flex; align-items: center; gap: 6px; padding: 12px 0; }
-.tabs button { border: 1px solid #24282c; background: transparent; color: #899198; padding: 9px 15px; cursor: default; }
+.tabs button { border: 1px solid #24282c; background: transparent; color: #899198; padding: 9px 15px; cursor: pointer; transition: background .14s ease, color .14s ease, border-color .14s ease; }
+.tabs button:hover { border-color: #515960; color: #d7dbde; }
 .tabs button.active { background: #f0f2f3; color: #0a0c0e; border-color: #f0f2f3; }
 .tabs span { margin-left: auto; color: #60686e; font-size: 12px; }
 
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .metrics article { padding: 22px; min-height: 150px; display: flex; flex-direction: column; }
 .metrics span { color: #8e969c; font-size: 12px; }
-.metrics strong { margin-top: auto; font-size: 36px; font-weight: 550; }
-.metrics small { margin-top: 5px; color: #596168; }
+.metrics strong { margin-top: auto; font-size: 36px; font-weight: 550; overflow-wrap: anywhere; }
+.metrics small { margin-top: 5px; color: #596168; line-height: 1.4; }
+
+.evidence-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, .7fr) minmax(0, 2fr);
+  gap: 28px;
+  margin-top: 12px;
+  padding: 22px;
+}
+.evidence-panel > div:first-child > strong { display: block; margin-top: 9px; font-size: 19px; letter-spacing: -.02em; }
+.evidence-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: #24282c; border: 1px solid #24282c; }
+.evidence-facts span { background: #0b0e10; padding: 14px 16px; color: #8e969c; font-size: 12px; line-height: 1.45; }
+.evidence-facts b { display: block; margin-bottom: 4px; color: #e4e7e9; font-weight: 600; }
 
 footer { display: flex; justify-content: space-between; gap: 20px; padding: 18px 2px; color: #545c62; font: 500 11px ui-monospace, monospace; }
 
@@ -77,10 +90,11 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 18px
   .map-stage { min-height: 430px; }
   .metrics { grid-template-columns: repeat(2, 1fr); }
   .tabs span { display: none; }
+  .evidence-panel { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 540px) {
-  .metrics { grid-template-columns: 1fr; }
+  .metrics, .evidence-facts { grid-template-columns: 1fr; }
   .map-stage { min-height: 380px; }
   footer { flex-direction: column; }
 }
