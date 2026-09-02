@@ -24,6 +24,21 @@ type IncidentArtifact = {
   };
 };
 
+type BuildingImpact = {
+  incident?: {
+    id?: string;
+    name?: string;
+    perimeterUpdatedAt?: string | null;
+  };
+  exposure?: {
+    mappedStructureCount?: number;
+    source?: string;
+    sourceUrl?: string;
+    datasetVintage?: string;
+    method?: string;
+  };
+};
+
 type Mode = "Impact" | "Recovery" | "Capacity";
 type LoadState = "loading" | "ready" | "missing";
 
@@ -45,7 +60,7 @@ function formatNumber(value?: number): string {
   return value == null ? "—" : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 }
 
-function formatDate(value?: string): string {
+function formatDate(value?: string | null): string {
   if (!value) return INCIDENT.startedAt;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return INCIDENT.startedAt;
@@ -58,6 +73,8 @@ export function App() {
   const [snapshotState, setSnapshotState] = useState<LoadState>("loading");
   const [perimeter, setPerimeter] = useState<FirePerimeter | null>(null);
   const [perimeterState, setPerimeterState] = useState<LoadState>("loading");
+  const [buildingImpact, setBuildingImpact] = useState<BuildingImpact | null>(null);
+  const [buildingState, setBuildingState] = useState<LoadState>("loading");
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +109,21 @@ export function App() {
         setPerimeterState("missing");
       });
 
+    fetch(`/api/impact/buildings?name=${encodeURIComponent("Plaskett")}`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error("missing");
+        return response.json() as Promise<BuildingImpact>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setBuildingImpact(data);
+        setBuildingState("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setBuildingState("missing");
+      });
+
     return () => { cancelled = true; };
   }, []);
 
@@ -102,6 +134,7 @@ export function App() {
   const recoveryMatches = recovery?.totalMatches;
   const acres = perimeter?.acres;
   const containment = perimeter?.containmentPct;
+  const mappedStructures = buildingImpact?.exposure?.mappedStructureCount;
 
   const recoveryLabel = recoveryCount === 0
     ? "No matching permits observed"
@@ -129,12 +162,12 @@ export function App() {
     }
 
     return [
-      { label: "Incident perimeter", value: acres == null ? "—" : `${formatNumber(acres)} ac`, note: perimeterState === "ready" ? "Live WFIGS perimeter metadata" : "Resolving perimeter" },
-      { label: "Containment", value: containment == null ? "—" : `${formatNumber(containment)}%`, note: perimeterState === "ready" ? "Reported with current perimeter" : "Awaiting WFIGS" },
+      { label: "Incident perimeter", value: acres == null ? "—" : `${formatNumber(acres)} ac`, note: perimeterState === "ready" ? "Live WFIGS polygon acreage" : "Resolving perimeter" },
+      { label: "Mapped structures exposed", value: mappedStructures == null ? "—" : formatNumber(mappedStructures), note: buildingState === "ready" ? "Monterey County footprints intersecting perimeter" : "Resolving county GIS" },
+      { label: "Containment", value: containment == null ? "—" : `${formatNumber(containment)}%`, note: perimeterState === "ready" ? "Reported with current WFIGS perimeter" : "Awaiting WFIGS" },
       { label: "Post-fire permit activity", value: recoveryCount == null ? "—" : String(recoveryCount), note: recoveryMatches != null ? `${formatNumber(recoveryMatches)} total matches in cached query` : recoveryLabel },
-      { label: "Built-world exposure", value: "NEXT", note: "Polygon × public structure/property layer" },
     ];
-  }, [acres, baselineCount, containment, mode, perimeterState, recovery, recoveryCount, recoveryLabel, recoveryMatches]);
+  }, [acres, baselineCount, buildingState, containment, mappedStructures, mode, perimeterState, recovery, recoveryCount, recoveryLabel, recoveryMatches]);
 
   return (
     <main className="shell">
@@ -154,16 +187,16 @@ export function App() {
             <strong>{perimeter?.name ?? INCIDENT.name}</strong>
             <p>
               Started {formatDate(perimeter?.discoveredAt)}. The perimeter is live from WFIGS; Shovels remains cached and credit-safe.
-              {acres != null ? ` ${formatNumber(acres)} acres are currently represented by the incident geometry.` : ""}
+              {mappedStructures != null ? ` ${formatNumber(mappedStructures)} mapped building footprints intersect the current perimeter.` : acres != null ? ` ${formatNumber(acres)} acres are represented by the incident geometry.` : ""}
             </p>
           </div>
         </article>
 
         <aside className="incident-card">
           <span className="eyebrow">OBSERVATION STATE</span>
-          <h2>{perimeterState === "ready" ? "The incident surface is live." : "Incident intelligence is coming online."}</h2>
+          <h2>{mappedStructures != null ? `${formatNumber(mappedStructures)} mapped structures intersect the fire perimeter.` : perimeterState === "ready" ? "The incident surface is live." : "Incident intelligence is coming online."}</h2>
           <ol>
-            <li><b>01</b><span><strong>Impact</strong>{perimeterState === "ready" ? "Authoritative perimeter geometry resolved; built-world intersection is next." : "Resolve what exists inside the incident perimeter."}</span></li>
+            <li><b>01</b><span><strong>Impact</strong>{mappedStructures != null ? "Live perimeter × county building footprints. Exposure proxy only; not confirmed damage." : "Resolve what exists inside the incident perimeter."}</span></li>
             <li><b>02</b><span><strong>Recovery</strong>{recoveryLabel}. Absence is reported as observation, not fact.</span></li>
             <li><b>03</b><span><strong>Capacity</strong>Compare emerging rebuild demand against normal local throughput.</span></li>
           </ol>
@@ -190,15 +223,15 @@ export function App() {
       <section className="evidence-panel">
         <div>
           <span className="eyebrow">EVIDENCE MODE</span>
-          <strong>{mode === "Impact" && perimeterState === "ready" ? "Live WFIGS perimeter loaded" : snapshotState === "ready" ? "Cached Shovels snapshot loaded" : snapshotState === "loading" ? "Loading cached evidence…" : "No committed Shovels snapshot found yet"}</strong>
+          <strong>{mode === "Impact" && perimeterState === "ready" ? "Live incident + public structure evidence" : snapshotState === "ready" ? "Cached Shovels snapshot loaded" : snapshotState === "loading" ? "Loading cached evidence…" : "No committed Shovels snapshot found yet"}</strong>
         </div>
         <div className="evidence-facts">
           {mode === "Impact" ? (
             <>
-              <span><b>Source</b> WFIGS Interagency Perimeters Current</span>
-              <span><b>Incident ID</b> {perimeter?.id ?? "—"}</span>
-              <span><b>Perimeter acres</b> {formatNumber(acres)}</span>
-              <span><b>Interpretation</b> Perimeter overlap is exposure only; it does not assert structure damage.</span>
+              <span><b>Perimeter source</b> WFIGS Interagency Perimeters Current · updated {formatDate(perimeter?.perimeterUpdatedAt)}</span>
+              <span><b>Structure source</b> Monterey County Building Footprints · {buildingImpact?.exposure?.datasetVintage ?? "2010 LiDAR-derived"}</span>
+              <span><b>Mapped intersections</b> {formatNumber(mappedStructures)}</span>
+              <span><b>Interpretation</b> Spatial intersection is an exposure proxy. Dataset age and perimeter uncertainty mean this is not a damage count.</span>
             </>
           ) : (
             <>
@@ -212,7 +245,7 @@ export function App() {
       </section>
 
       <footer>
-        <span>WFIGS / CAL FIRE → incident adapter → cached Shovels enrichment → deterministic analysis</span>
+        <span>WFIGS + county GIS → impact · cached Shovels → recovery/capacity</span>
         <span>Exposure ≠ damage · absence ≠ proof</span>
       </footer>
     </main>
