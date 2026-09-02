@@ -2,7 +2,7 @@
 
 Turn incident geometry into built-world intelligence.
 
-Recovery Radar is an incident-agnostic framework for combining disaster/event boundaries with permit, property, jurisdiction, and contractor intelligence. The first deployment target is California wildfire recovery using CAL FIRE incident data and the Shovels API.
+Recovery Radar is an incident-agnostic framework for combining disaster/event boundaries with permit, property, jurisdiction, and contractor intelligence. The first deployment target is California wildfire recovery using CAL FIRE incident context, WFIGS/NIFC perimeter geometry, and the Shovels API.
 
 ## Product model
 
@@ -29,31 +29,32 @@ interface Incident {
 Everything downstream consumes that contract.
 
 ```text
-CAL FIRE / future incident source
-            |
-            v
-       Incident adapter
-            |
-            v
-        geometry + date
-            |
-     +------+------+
-     |             |
-     v             v
-  Shovels       public GIS
- built world      context
-     |             |
-     +------+------+
-            |
-            v
-  Impact / Recovery / Capacity
+CAL FIRE context + WFIGS perimeter
+                |
+                v
+          Incident adapter
+                |
+                v
+          geometry + date
+                |
+         +------+------+
+         |             |
+         v             v
+      Shovels       public GIS
+     built world      context
+         |             |
+         +------+------+
+                |
+                v
+      Impact / Recovery / Capacity
 ```
 
 ## MVP
 
 - React + TypeScript + Vite
 - Cloudflare Worker + Static Assets
-- CAL FIRE adapter
+- WFIGS/NIFC live perimeter adapter
+- CAL FIRE incident/context adapter (next)
 - Shovels API adapter
 - Local point-in-polygon filtering
 - Impact, Recovery, and Capacity views
@@ -74,7 +75,7 @@ CAL FIRE / future incident source
 pnpm incident:add --source calfire --id <incident-id>
 ```
 
-The command should resolve the incident, normalize its geometry and metadata, derive the relevant Shovels geography, and emit an incident manifest consumable by the application.
+The command should resolve CAL FIRE metadata, pair it with the best available WFIGS perimeter, derive the relevant Shovels geography, and emit an incident manifest consumable by the application.
 
 ## Environment
 
@@ -84,6 +85,16 @@ SHOVELS_API_KEY=
 
 Never expose the Shovels API key to the browser.
 
+## Current API routes
+
+```text
+GET /api/health
+GET /api/fire/perimeter?name=Plaskett
+GET /api/shovels/permits?geo_id=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD
+```
+
+Shovels permit search currently requires a geographic identifier and date range, so the incident pipeline will resolve affected ZIPs/jurisdictions before spatially filtering returned permit points against the incident perimeter.
+
 ## Status
 
-Initial scaffold in progress.
+Initial incident-engine scaffold in progress.
