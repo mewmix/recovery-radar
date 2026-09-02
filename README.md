@@ -1,76 +1,79 @@
 # Recovery Radar
 
-Turn incident geometry into built-world intelligence.
+Wildfire impact/recovery dashboard. Plaskett Fire is the current test case.
 
-Recovery Radar combines disaster/event boundaries with permit, property, jurisdiction, and contractor intelligence. California wildfire recovery is the first deployment target, using CAL FIRE incident context, WFIGS/NIFC perimeter geometry, public GIS, and selectively ingested Shovels data.
+Live: https://recovery-radar.alexanderjamesklein.workers.dev
 
-## Architecture
-
-```text
-WFIGS perimeter
-      |
-      +----------------------+
-      |                      |
-      v                      v
-public structure GIS   controlled Shovels ingest
-      |                      |
-      v                      v
-free impact signal     sanitized cached snapshot
-      |                      |
-      +----------+-----------+
-                 |
-                 v
-       Impact / Recovery / Capacity
-```
-
-**Shovels is not a request-time backend.** Public traffic never calls Shovels and cannot consume API credits. Shovels enrichment is an explicit local ingestion step that writes sanitized incident snapshots into `public/data/incidents/`.
-
-The Impact surface is intentionally free at runtime. For the Plaskett prototype, the Worker intersects the freshest WFIGS perimeter with Monterey County's public Building Footprints layer. The county footprints are derived from 2010 LiDAR, so their count is labeled a **mapped-structure exposure proxy**, never a damage count.
-
-## MVP
+## Stack
 
 - React + TypeScript + Vite
 - Cloudflare Worker + Static Assets
-- MapLibre + OpenFreeMap dark basemap
-- WFIGS/NIFC live perimeter adapter
-- Monterey County building-footprint exposure adapter
-- Credit-governed Shovels ingestion CLI
-- Cached/sanitized public incident snapshots
-- Impact, Recovery, and Capacity views
-- Evidence-first metrics
-- No database or authentication in v0
+- Cloudflare KV for recovery state
+- MapLibre + OpenFreeMap
+- WFIGS/NIFC for current perimeter
+- Monterey County GIS for building footprints
+- Shovels for permit/recovery data
 
-## Design principles
+## Data flow
 
-1. **Incident-agnostic core.** Wildfire is the first adapter, not the architecture.
-2. **Exposure is not damage.** Geometry overlap is reported as exposure unless authoritative damage data confirms destruction.
-3. **Evidence travels with the number.** Derived metrics retain their inputs, source, vintage, and confidence/coverage information.
-4. **Credits are a hard budget.** Expensive commercial data is ingested deliberately, sanitized, cached, and reused.
-5. **Use free public evidence first.** Commercial enrichment should add decision value, not duplicate public geometry.
-6. **One application, many incidents.** Adding an incident creates a route/data manifest, not a deployment.
+```text
+WFIGS perimeter -----> map / acreage / perimeter time
+        |
+        +-----> Monterey County GIS -----> building intersections
+        |
+        +-----> cached Shovels sites -----> inside / <=5 km / outside
 
-## Local setup
+Cloudflare cron -----> Shovels incremental recovery query -----> KV
+```
+
+Public traffic never calls Shovels directly.
+
+## Rules
+
+- perimeter overlap = exposure, not confirmed damage
+- permit rows != projects
+- no returned Shovels records = no observed records for that query window, not proof of no activity
+- Shovels credit reserve: 100
+- scheduled recovery max: 5 returned records/run
+- state-wide Shovels queries blocked by default in the local ingest CLI
+
+## Current Plaskett scope
+
+- incident: Plaskett Fire
+- Shovels geo: `93920`
+- baseline: `2025-08-26` through `2026-08-25`
+- recovery start: `2026-08-26`
+- manually checked through `2026-09-01`: 0 recovery permits returned
+- scheduled sync: daily at `15:15 UTC`
+
+The baseline sample is intentionally small. It is used for site/trade/permit timing examples, not market sizing.
+
+## Local
 
 ```bash
 npm install
 cp .dev.vars.example .dev.vars
 ```
 
-Put the real key in `.dev.vars`:
+`.dev.vars`:
 
 ```text
-SHOVELS_API_KEY=your_key_here
+SHOVELS_API_KEY=...
 ```
 
-`.dev.vars` is gitignored and the key is not required in Cloudflare for v0.
-
-Run the app:
+Run:
 
 ```bash
 npm run dev
 ```
 
-Useful free endpoints:
+Build/check:
+
+```bash
+npm run check
+```
+
+## API
 
 ```text
 GET /api/health
@@ -79,15 +82,11 @@ GET /api/impact/buildings?name=Plaskett
 GET /api/incidents/plaskett-2026
 ```
 
-`/api/impact/buildings` performs a server-side spatial intersection between the live WFIGS polygon and Monterey County building footprints and is cached for one hour.
+`/api/incidents/plaskett-2026` merges the committed incident snapshot with KV recovery state when available.
 
-## Credit-safe Shovels ingestion
+## Shovels ingest
 
-Shovels accepts a state code, ZIP code, or Shovels address/city/county/jurisdiction geolocation ID as `geo_id`. Prefer the narrowest useful geography. The CLI refuses a two-letter state code by default so a typo cannot spend credits on an arbitrary statewide sample.
-
-For the Plaskett Fire, ZIP **93920** is the initial Big Sur/south-coast geography.
-
-Check the budget and arguments without consuming permit records:
+Budget check only:
 
 ```bash
 npm run ingest:shovels -- \
@@ -99,19 +98,7 @@ npm run ingest:shovels -- \
   --dry-run
 ```
 
-Use `--probe` when deciding whether a window deserves a larger spend. Probe mode asks for one record with `include_count=true`, letting us learn the total match count at minimal cost when records exist.
-
-```bash
-npm run ingest:shovels -- \
-  --slug plaskett-2026 \
-  --dataset baseline \
-  --geo-id 93920 \
-  --from 2025-08-26 \
-  --to 2026-08-25 \
-  --probe
-```
-
-Keep baseline and recovery data separately inside the same incident artifact. A small baseline sample:
+Small baseline pull:
 
 ```bash
 npm run ingest:shovels -- \
@@ -124,22 +111,33 @@ npm run ingest:shovels -- \
   --reserve 100
 ```
 
-Defaults are deliberately conservative: `25` records maximum per sync and `100` credits protected as reserve. The CLI checks `GET /v2/usage` first and refuses to query permits if it cannot verify the remaining balance.
-
-The generated snapshot is written to:
+Snapshots go to:
 
 ```text
 public/data/incidents/<slug>.json
 ```
 
-Only a sanitized permit subset is published; street addresses and raw API responses are not written to the public artifact.
-
-There is intentionally **no public Shovels proxy route**.
+Published Shovels data is sanitized. No street address/raw response dump.
 
 ## Deploy
+
+First deploy / secret upload:
+
+```bash
+npm run deploy:first
+```
+
+Normal deploy:
 
 ```bash
 npm run deploy
 ```
 
-The frontend, Worker API, live public-GIS queries, and cached incident snapshots deploy together to Cloudflare.
+Cloudflare config includes:
+
+```text
+Worker: recovery-radar
+KV: RECOVERY_STATE
+Cron: 15 15 * * *
+Secret: SHOVELS_API_KEY
+```
