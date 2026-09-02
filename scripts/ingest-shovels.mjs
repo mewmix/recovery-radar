@@ -39,18 +39,49 @@ function headerInt(response, name) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function bodyRemaining(body) {
-  if (!body || typeof body !== "object") return null;
-  const candidates = [
+function finiteNumber(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function bodyCreditState(body) {
+  if (!body || typeof body !== "object") {
+    return { used: null, limit: null, remaining: null, unlimited: false };
+  }
+
+  const used = finiteNumber(body.credits_used);
+  const limit = finiteNumber(body.credit_limit);
+
+  // Current Shovels /v2/usage response is { credits_used, credit_limit, ... }.
+  // credit_limit === null means unlimited according to the OpenAPI schema.
+  if (body.credit_limit === null && used != null) {
+    return { used, limit: null, remaining: null, unlimited: true };
+  }
+
+  if (used != null && limit != null) {
+    return {
+      used,
+      limit,
+      remaining: Math.max(0, limit - used),
+      unlimited: false,
+    };
+  }
+
+  // Backward/forward-compatible fallbacks if the API ever adds a direct remaining field.
+  const directRemaining = [
     body.credits_remaining,
     body.remaining_credits,
     body.remaining,
     body.credit_remaining,
-  ];
-  for (const candidate of candidates) {
-    if (Number.isFinite(candidate)) return Number(candidate);
-  }
-  return null;
+  ]
+    .map(finiteNumber)
+    .find((candidate) => candidate != null) ?? null;
+
+  return { used, limit, remaining: directRemaining, unlimited: false };
 }
 
 async function shovelsGet(apiKey, path, params) {
@@ -122,32 +153,54 @@ async function main() {
   const dryRun = process.argv.includes("--dry-run");
 
   const usage = await shovelsGet(apiKey, "/usage");
-  const remaining = headerInt(usage.response, "X-Credits-Remaining") ?? bodyRemaining(usage.body);
-  const limit = headerInt(usage.response, "X-Credits-Limit");
+  const bodyState = bodyCreditState(usage.body);
+  const headerRemaining = headerInt(usage.response, "X-Credits-Remaining");
+  const headerLimit = headerInt(usage.response, "X-Credits-Limit");
 
-  if (remaining == null) {
-    throw new Error("Could not verify remaining Shovels credits; refusing to ingest.");
+  const limit = headerLimit ?? bodyState.limit;
+  const remaining = headerRemaining ?? bodyState.remaining;
+
+  if (bodyState.unlimited) {
+    console.log(`Shovels credits: unlimited (${bodyState.used ?? 0} used in rolling window)`);
+    console.log(`Requested records: ${requestedLimit}`);
+    if (dryRun) {
+      console.log(`Dry run: sync is allowed for up to ${requestedLimit} records; no permit query sent.`);
+      return;
+    }
+  } else {
+    if (remaining == null) {
+      throw new Error(
+        `Could not verify remaining Shovels credits; refusing to ingest. Usage response keys: ${
+          usage.body && typeof usage.body === "object" ? Object.keys(usage.body).join(", ") : "non-object response"
+        }`,
+      );
+    }
+
+    const spendable = Math.max(0, remaining - reserve);
+    const effectiveLimit = Math.min(requestedLimit, spendable);
+
+    console.log(`Shovels credits: ${remaining}${limit == null ? "" : ` / ${limit}`} remaining`);
+    if (bodyState.used != null) console.log(`Rolling usage: ${bodyState.used} credits`);
+    console.log(`Protected reserve: ${reserve}`);
+    console.log(`Requested records: ${requestedLimit}`);
+
+    if (effectiveLimit < 1) {
+      throw new Error(`Sync refused: ${remaining} credits remain and ${reserve} are reserved.`);
+    }
+
+    if (effectiveLimit < requestedLimit) {
+      console.log(`Budget clamp: request reduced to ${effectiveLimit} records.`);
+    }
+
+    if (dryRun) {
+      console.log(`Dry run: sync is allowed for up to ${effectiveLimit} records; no permit query sent.`);
+      return;
+    }
   }
 
-  const spendable = Math.max(0, remaining - reserve);
-  const effectiveLimit = Math.min(requestedLimit, spendable);
-
-  console.log(`Shovels credits: ${remaining}${limit == null ? "" : ` / ${limit}`} remaining`);
-  console.log(`Protected reserve: ${reserve}`);
-  console.log(`Requested records: ${requestedLimit}`);
-
-  if (effectiveLimit < 1) {
-    throw new Error(`Sync refused: ${remaining} credits remain and ${reserve} are reserved.`);
-  }
-
-  if (effectiveLimit < requestedLimit) {
-    console.log(`Budget clamp: request reduced to ${effectiveLimit} records.`);
-  }
-
-  if (dryRun) {
-    console.log(`Dry run: sync is allowed for up to ${effectiveLimit} records; no permit query sent.`);
-    return;
-  }
+  const effectiveLimit = bodyState.unlimited
+    ? requestedLimit
+    : Math.min(requestedLimit, Math.max(0, remaining - reserve));
 
   const query = await shovelsGet(apiKey, "/permits/search", {
     geo_id: geoId,
