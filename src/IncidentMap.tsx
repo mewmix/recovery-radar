@@ -83,6 +83,16 @@ function baselineGeoJson(points: PermitMapPoint[]): FeatureCollection<Point> {
   };
 }
 
+function formatObservedValue(value: number): string {
+  if (!(value > 0)) return "no stated value";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: value >= 1_000_000 ? "compact" : "standard",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 export function IncidentMap({ perimeter, state, baselinePermits = [] }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -195,9 +205,11 @@ export function IncidentMap({ perimeter, state, baselinePermits = [] }: Props) {
           const distanceText = Number.isFinite(distance)
             ? exposure === "INSIDE" ? "inside current perimeter" : `${distance.toFixed(1)} km from perimeter`
             : "distance unavailable";
+          const tags = String(properties.tags ?? "").trim() || "untagged activity";
+          const value = Number(properties.jobValue ?? 0);
           new maplibregl.Popup({ closeButton: false, offset: 9 })
             .setLngLat(feature.geometry.coordinates as [number, number])
-            .setText(`${exposure} · ${distanceText}`)
+            .setText(`${exposure} · ${distanceText} · ${tags} · ${formatObservedValue(value)}`)
             .addTo(map);
         });
       }
