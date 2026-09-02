@@ -1,8 +1,7 @@
 import { findCurrentFirePerimeter } from "./providers/wfigs";
-import { searchPermits } from "./providers/shovels";
 
 interface Env {
-  SHOVELS_API_KEY: string;
+  ASSETS: Fetcher;
 }
 
 function json(data: unknown, init: ResponseInit = {}): Response {
@@ -16,6 +15,11 @@ function required(url: URL, name: string): string {
   const value = url.searchParams.get(name)?.trim();
   if (!value) throw new Error(`Missing query parameter: ${name}`);
   return value;
+}
+
+function incidentSlug(pathname: string): string | null {
+  const match = pathname.match(/^\/api\/incidents\/([a-z0-9-]+)$/);
+  return match?.[1] ?? null;
 }
 
 export default {
@@ -35,20 +39,19 @@ export default {
           : json({ error: "No current perimeter found" }, { status: 404 });
       }
 
-      if (url.pathname === "/api/shovels/permits") {
-        if (!env.SHOVELS_API_KEY) {
-          return json({ error: "SHOVELS_API_KEY is not configured" }, { status: 503 });
+      const slug = incidentSlug(url.pathname);
+      if (slug) {
+        const assetUrl = new URL(`/data/incidents/${slug}.json`, url);
+        const asset = await env.ASSETS.fetch(new Request(assetUrl, request));
+        const contentType = asset.headers.get("content-type") ?? "";
+
+        if (!asset.ok || !contentType.includes("application/json")) {
+          return json({ error: "Incident snapshot not found" }, { status: 404 });
         }
 
-        const result = await searchPermits(env, {
-          geoId: required(url, "geo_id"),
-          permitFrom: required(url, "from"),
-          permitTo: required(url, "to"),
-          cursor: url.searchParams.get("cursor") ?? undefined,
-          includeCount: url.searchParams.get("include_count") === "true",
-          tags: url.searchParams.getAll("tag"),
-        });
-        return json(result);
+        const headers = new Headers(asset.headers);
+        headers.set("cache-control", "public, max-age=300, stale-while-revalidate=86400");
+        return new Response(asset.body, { status: asset.status, headers });
       }
 
       return json({ error: "Not found" }, { status: 404 });
