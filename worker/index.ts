@@ -46,7 +46,7 @@ export default {
       const slug = incidentSlug(url.pathname);
       if (slug) {
         const assetUrl = new URL(`/data/incidents/${slug}.json`, url);
-        const asset = await env.ASSETS.fetch(new Request(assetUrl, request));
+        const asset = await env.ASSETS.fetch(new Request(assetUrl.toString()));
         const contentType = asset.headers.get("content-type") ?? "";
 
         if (!asset.ok || !contentType.includes("application/json")) {
