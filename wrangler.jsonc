@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "recovery-radar",
+  "compatibility_date": "2026-09-01",
+  "main": "./worker/index.ts",
+  "assets": {
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
