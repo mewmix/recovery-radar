@@ -83,14 +83,48 @@ function baselineGeoJson(points: PermitMapPoint[]): FeatureCollection<Point> {
   };
 }
 
-function formatObservedValue(value: number): string {
-  if (!(value > 0)) return "no stated value";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    notation: value >= 1_000_000 ? "compact" : "standard",
-    maximumFractionDigits: 1,
-  }).format(value);
+function popupContent(properties: Record<string, unknown>): HTMLElement {
+  const exposure = String(properties.exposure ?? "outside").toUpperCase();
+  const distance = Number(properties.distanceKm);
+  const tags = String(properties.tags ?? "").trim();
+  const value = Number(properties.jobValue);
+
+  const root = document.createElement("div");
+  root.className = "site-popup";
+
+  const label = document.createElement("span");
+  label.className = `site-popup-class site-popup-${exposure.toLowerCase()}`;
+  label.textContent = exposure;
+  root.append(label);
+
+  const primary = document.createElement("strong");
+  primary.textContent = exposure === "INSIDE"
+    ? "Inside perimeter"
+    : Number.isFinite(distance) ? `${distance.toFixed(1)} km` : "Distance unavailable";
+  root.append(primary);
+
+  if (exposure !== "INSIDE" && Number.isFinite(distance)) {
+    const secondary = document.createElement("span");
+    secondary.className = "site-popup-muted";
+    secondary.textContent = "from perimeter";
+    root.append(secondary);
+  }
+
+  if (tags) {
+    const tagLine = document.createElement("span");
+    tagLine.className = "site-popup-detail";
+    tagLine.textContent = tags.toUpperCase();
+    root.append(tagLine);
+  }
+
+  if (Number.isFinite(value) && value > 0) {
+    const valueLine = document.createElement("span");
+    valueLine.className = "site-popup-detail";
+    valueLine.textContent = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 }).format(value);
+    root.append(valueLine);
+  }
+
+  return root;
 }
 
 export function IncidentMap({ perimeter, state, baselinePermits = [] }: Props) {
@@ -139,20 +173,13 @@ export function IncidentMap({ perimeter, state, baselinePermits = [] }: Props) {
           id: FILL_LAYER_ID,
           type: "fill",
           source: SOURCE_ID,
-          paint: {
-            "fill-color": "#ff5d45",
-            "fill-opacity": 0.24,
-          },
+          paint: { "fill-color": "#ff5d45", "fill-opacity": 0.24 },
         });
         map.addLayer({
           id: LINE_LAYER_ID,
           type: "line",
           source: SOURCE_ID,
-          paint: {
-            "line-color": "#ff7964",
-            "line-width": 2.4,
-            "line-opacity": 0.95,
-          },
+          paint: { "line-color": "#ff7964", "line-width": 2.4, "line-opacity": 0.95 },
         });
       }
 
@@ -181,13 +208,7 @@ export function IncidentMap({ perimeter, state, baselinePermits = [] }: Props) {
           source: BASELINE_SOURCE_ID,
           paint: {
             "circle-radius": ["match", ["get", "exposure"], "inside", 7, "near", 6, 5],
-            "circle-color": [
-              "match",
-              ["get", "exposure"],
-              "inside", "#ff5d45",
-              "near", "#f2c94c",
-              "#f3f5f7",
-            ],
+            "circle-color": ["match", ["get", "exposure"], "inside", "#ff5d45", "near", "#f2c94c", "#f3f5f7"],
             "circle-stroke-color": "#090b0d",
             "circle-stroke-width": 1.5,
             "circle-opacity": 0.95,
@@ -199,17 +220,9 @@ export function IncidentMap({ perimeter, state, baselinePermits = [] }: Props) {
         map.on("click", BASELINE_LAYER_ID, (event) => {
           const feature = event.features?.[0];
           if (!feature || feature.geometry.type !== "Point") return;
-          const properties = feature.properties ?? {};
-          const distance = Number(properties.distanceKm);
-          const exposure = String(properties.exposure ?? "outside").toUpperCase();
-          const distanceText = Number.isFinite(distance)
-            ? exposure === "INSIDE" ? "inside current perimeter" : `${distance.toFixed(1)} km from perimeter`
-            : "distance unavailable";
-          const tags = String(properties.tags ?? "").trim() || "untagged activity";
-          const value = Number(properties.jobValue ?? 0);
-          new maplibregl.Popup({ closeButton: false, offset: 9 })
+          new maplibregl.Popup({ closeButton: false, offset: 10, className: "recovery-popup" })
             .setLngLat(feature.geometry.coordinates as [number, number])
-            .setText(`${exposure} · ${distanceText} · ${tags} · ${formatObservedValue(value)}`)
+            .setDOMContent(popupContent(feature.properties ?? {}))
             .addTo(map);
         });
       }
@@ -224,10 +237,10 @@ export function IncidentMap({ perimeter, state, baselinePermits = [] }: Props) {
 
   return (
     <div className="incident-map-wrap">
-      <div ref={containerRef} className="incident-map" aria-label="Interactive Plaskett Fire perimeter and baseline activity map" />
+      <div ref={containerRef} className="incident-map" aria-label="Plaskett Fire perimeter and sampled pre-fire sites" />
       <div className={`map-state map-state-${state}`}>
         <span className="map-state-dot" />
-        {state === "ready" ? "WFIGS perimeter live · site proximity classified" : state === "loading" ? "Resolving WFIGS perimeter…" : "Perimeter unavailable"}
+        {state === "ready" ? "WFIGS LIVE" : state === "loading" ? "LOADING" : "UNAVAILABLE"}
       </div>
     </div>
   );
