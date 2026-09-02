@@ -1,24 +1,29 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "recovery-radar",
-  "compatibility_date": "2026-09-01",
-  "main": "./worker/index.ts",
-  "assets": {
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
-  },
-  "kv_namespaces": [
-    {
-      "binding": "RECOVERY_STATE"
-    }
-  ],
-  "secrets": {
-    "required": ["SHOVELS_API_KEY"]
-  },
-  "triggers": {
-    "crons": ["15 15 * * *"]
-  },
-  "observability": {
-    "enabled": true
-  }
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "recovery-radar",
+	"compatibility_date": "2026-09-01",
+	"main": "./worker/index.ts",
+	"assets": {
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application"
+	},
+	"kv_namespaces": [
+		{
+			"binding": "RECOVERY_STATE",
+			"id": "3c08b8e4e4a847ada74e9f61bf9cdeaf"
+		}
+	],
+	"secrets": {
+		"required": [
+			"SHOVELS_API_KEY"
+		]
+	},
+	"triggers": {
+		"crons": [
+			"15 15 * * *"
+		]
+	},
+	"observability": {
+		"enabled": true
+	}
 }
