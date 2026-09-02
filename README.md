@@ -2,31 +2,9 @@
 
 Turn incident geometry into built-world intelligence.
 
-Recovery Radar is an incident-agnostic framework for combining disaster/event boundaries with permit, property, jurisdiction, and contractor intelligence. The first deployment target is California wildfire recovery using CAL FIRE incident context, WFIGS/NIFC perimeter geometry, and the Shovels API.
+Recovery Radar combines disaster/event boundaries with permit, property, jurisdiction, and contractor intelligence. California wildfire recovery is the first deployment target, using CAL FIRE incident context, WFIGS/NIFC perimeter geometry, and selectively ingested Shovels data.
 
-## Product model
-
-An incident adapter provides a normalized incident:
-
-```ts
-interface Incident {
-  id: string;
-  slug: string;
-  name: string;
-  type: "wildfire" | "flood" | "earthquake" | "tornado";
-  startedAt: string;
-  state: string;
-  counties: string[];
-  geometry?: GeoJSON.Polygon | GeoJSON.MultiPolygon;
-  source: {
-    provider: string;
-    id: string;
-    url?: string;
-  };
-}
-```
-
-Everything downstream consumes that contract.
+## Architecture
 
 ```text
 CAL FIRE context + WFIGS perimeter
@@ -40,8 +18,11 @@ CAL FIRE context + WFIGS perimeter
          +------+------+
          |             |
          v             v
-      Shovels       public GIS
-     built world      context
+  controlled ingest   public GIS
+      (Shovels)        context
+         |             |
+         v             |
+ sanitized snapshot   |
          |             |
          +------+------+
                 |
@@ -49,16 +30,19 @@ CAL FIRE context + WFIGS perimeter
       Impact / Recovery / Capacity
 ```
 
+**Shovels is not a request-time backend.** Public traffic never calls Shovels and cannot consume API credits. Shovels enrichment is an explicit local ingestion step that writes sanitized incident snapshots into `public/data/incidents/`.
+
 ## MVP
 
 - React + TypeScript + Vite
 - Cloudflare Worker + Static Assets
 - WFIGS/NIFC live perimeter adapter
 - CAL FIRE incident/context adapter (next)
-- Shovels API adapter
+- Credit-governed Shovels ingestion CLI
+- Cached/sanitized public incident snapshots
 - Local point-in-polygon filtering
 - Impact, Recovery, and Capacity views
-- Evidence-first metrics: expose source, calculation, coverage, and uncertainty
+- Evidence-first metrics
 - No database or authentication in v0
 
 ## Design principles
@@ -66,35 +50,73 @@ CAL FIRE context + WFIGS perimeter
 1. **Incident-agnostic core.** Wildfire is the first adapter, not the architecture.
 2. **Exposure is not damage.** Geometry overlap is reported as exposure unless authoritative damage data confirms destruction.
 3. **Evidence travels with the number.** Derived metrics retain their inputs, source, and confidence/coverage information.
-4. **Precompute what changes slowly.** Use live Shovels calls only for intentional drill-down and fresh recovery signals.
-5. **One application, many incidents.** Adding an incident creates a route/data manifest, not a new deployment.
+4. **Credits are a hard budget.** Expensive commercial data is ingested deliberately, sanitized, cached, and reused.
+5. **One application, many incidents.** Adding an incident creates a route/data manifest, not a deployment.
 
-## Target command
-
-```bash
-pnpm incident:add --source calfire --id <incident-id>
-```
-
-The command should resolve CAL FIRE metadata, pair it with the best available WFIGS perimeter, derive the relevant Shovels geography, and emit an incident manifest consumable by the application.
-
-## Environment
+## Local setup
 
 ```bash
-SHOVELS_API_KEY=
+npm install
+cp .dev.vars.example .dev.vars
 ```
 
-Never expose the Shovels API key to the browser.
+Put the real key in `.dev.vars`:
 
-## Current API routes
+```text
+SHOVELS_API_KEY=your_key_here
+```
+
+`.dev.vars` is gitignored and the key is not required in Cloudflare for v0.
+
+## Credit-safe Shovels ingestion
+
+Check the budget without consuming permit records:
+
+```bash
+npm run ingest:shovels -- \
+  --slug plaskett-2026 \
+  --geo-id CA \
+  --from 2026-08-26 \
+  --to 2026-09-01 \
+  --dry-run
+```
+
+Run an ingestion:
+
+```bash
+npm run ingest:shovels -- \
+  --slug plaskett-2026 \
+  --geo-id CA \
+  --from 2026-08-26 \
+  --to 2026-09-01 \
+  --limit 25 \
+  --reserve 100
+```
+
+Defaults are deliberately conservative: `25` records maximum per sync and `100` credits protected as reserve. The CLI checks `GET /v2/usage` first and refuses to query permits if it cannot verify the remaining balance.
+
+The generated snapshot is written to:
+
+```text
+public/data/incidents/<slug>.json
+```
+
+Only a sanitized permit subset is published; street addresses and raw API responses are not written to the public artifact.
+
+## Public API routes
 
 ```text
 GET /api/health
 GET /api/fire/perimeter?name=Plaskett
-GET /api/shovels/permits?geo_id=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD
+GET /api/incidents/<slug>
 ```
 
-Shovels permit search currently requires a geographic identifier and date range, so the incident pipeline will resolve affected ZIPs/jurisdictions before spatially filtering returned permit points against the incident perimeter.
+There is intentionally **no public Shovels proxy route**.
 
-## Status
+## Deploy
 
-Initial incident-engine scaffold in progress.
+```bash
+npm run deploy
+```
+
+The frontend, Worker API, and cached incident snapshots deploy together to Cloudflare.
