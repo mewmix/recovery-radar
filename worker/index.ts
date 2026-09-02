@@ -1,3 +1,4 @@
+import { countMontereyBuildingsInPerimeter } from "./providers/montereyBuildings";
 import { findCurrentFirePerimeter } from "./providers/wfigs";
 
 interface AssetBinding {
@@ -39,8 +40,27 @@ export default {
         const name = required(url, "name");
         const perimeter = await findCurrentFirePerimeter(name);
         return perimeter
-          ? json(perimeter, { headers: { "cache-control": "public, max-age=300" } })
+          ? json(perimeter, { headers: { "cache-control": "public, max-age=300, stale-while-revalidate=1800" } })
           : json({ error: "No current perimeter found" }, { status: 404 });
+      }
+
+      if (url.pathname === "/api/impact/buildings") {
+        const name = required(url, "name");
+        const perimeter = await findCurrentFirePerimeter(name);
+        if (!perimeter) return json({ error: "No current perimeter found" }, { status: 404 });
+
+        const exposure = await countMontereyBuildingsInPerimeter(perimeter.geometry);
+        return json(
+          {
+            incident: {
+              id: perimeter.id,
+              name: perimeter.name,
+              perimeterUpdatedAt: perimeter.perimeterUpdatedAt ?? null,
+            },
+            exposure,
+          },
+          { headers: { "cache-control": "public, max-age=3600, stale-while-revalidate=21600" } },
+        );
       }
 
       const slug = incidentSlug(url.pathname);
