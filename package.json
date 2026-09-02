@@ -1,0 +1,29 @@
+{
+  "name": "recovery-radar",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "npm run build && vite preview",
+    "deploy": "wrangler deploy",
+    "check": "tsc -b && vite build && wrangler deploy --dry-run"
+  },
+  "dependencies": {
+    "@turf/boolean-point-in-polygon": "^7.2.0",
+    "maplibre-gl": "^5.7.1",
+    "react": "19.2.1",
+    "react-dom": "19.2.1"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.15.3",
+    "@types/geojson": "^7946.0.16",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "5.9.3",
+    "vite": "^7.0.0",
+    "wrangler": "4.88.0"
+  }
+}
