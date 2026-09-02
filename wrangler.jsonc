@@ -12,6 +12,9 @@
       "binding": "RECOVERY_STATE"
     }
   ],
+  "secrets": {
+    "required": ["SHOVELS_API_KEY"]
+  },
   "triggers": {
     "crons": ["15 15 * * *"]
   },
