@@ -39,49 +39,34 @@ function headerInt(response, name) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function finiteNumber(value) {
+function numeric(value) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim() !== "") {
     const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
+    return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
 }
 
-function bodyCreditState(body) {
-  if (!body || typeof body !== "object") {
-    return { used: null, limit: null, remaining: null, unlimited: false };
+function usageBudget(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { used: null, limit: null, remaining: null };
   }
 
-  const used = finiteNumber(body.credits_used);
-  const limit = finiteNumber(body.credit_limit);
-
-  // Current Shovels /v2/usage response is { credits_used, credit_limit, ... }.
-  // credit_limit === null means unlimited according to the OpenAPI schema.
-  if (body.credit_limit === null && used != null) {
-    return { used, limit: null, remaining: null, unlimited: true };
-  }
-
-  if (used != null && limit != null) {
-    return {
-      used,
-      limit,
-      remaining: Math.max(0, limit - used),
-      unlimited: false,
-    };
-  }
-
-  // Backward/forward-compatible fallbacks if the API ever adds a direct remaining field.
   const directRemaining = [
     body.credits_remaining,
     body.remaining_credits,
     body.remaining,
     body.credit_remaining,
   ]
-    .map(finiteNumber)
-    .find((candidate) => candidate != null) ?? null;
+    .map(numeric)
+    .find((item) => item != null) ?? null;
 
-  return { used, limit, remaining: directRemaining, unlimited: false };
+  const used = numeric(body.credits_used ?? body.credit_used ?? body.used);
+  const limit = numeric(body.credit_limit ?? body.credits_limit ?? body.limit);
+  const remaining = directRemaining ?? (used != null && limit != null ? Math.max(0, limit - used) : null);
+
+  return { used, limit, remaining };
 }
 
 async function shovelsGet(apiKey, path, params) {
@@ -145,6 +130,13 @@ async function main() {
   if (!/^[a-z0-9-]+$/.test(slug)) throw new Error("--slug must contain only lowercase letters, numbers, and hyphens");
 
   const geoId = required("geo-id");
+  const allowBroadGeo = process.argv.includes("--allow-broad-geo");
+  if (/^[A-Z]{2}$/.test(geoId) && !allowBroadGeo) {
+    throw new Error(
+      `Refusing broad state-level geo-id ${geoId}. Use a ZIP/county/jurisdiction geo_id, or pass --allow-broad-geo intentionally.`,
+    );
+  }
+
   const permitFrom = required("from");
   const permitTo = required("to");
   const requestedLimit = integer("limit", DEFAULT_LIMIT, 1, 100);
@@ -153,54 +145,38 @@ async function main() {
   const dryRun = process.argv.includes("--dry-run");
 
   const usage = await shovelsGet(apiKey, "/usage");
-  const bodyState = bodyCreditState(usage.body);
-  const headerRemaining = headerInt(usage.response, "X-Credits-Remaining");
-  const headerLimit = headerInt(usage.response, "X-Credits-Limit");
+  const parsedUsage = usageBudget(usage.body);
+  const remaining = headerInt(usage.response, "X-Credits-Remaining") ?? parsedUsage.remaining;
+  const limit = headerInt(usage.response, "X-Credits-Limit") ?? parsedUsage.limit;
 
-  const limit = headerLimit ?? bodyState.limit;
-  const remaining = headerRemaining ?? bodyState.remaining;
-
-  if (bodyState.unlimited) {
-    console.log(`Shovels credits: unlimited (${bodyState.used ?? 0} used in rolling window)`);
-    console.log(`Requested records: ${requestedLimit}`);
-    if (dryRun) {
-      console.log(`Dry run: sync is allowed for up to ${requestedLimit} records; no permit query sent.`);
-      return;
-    }
-  } else {
-    if (remaining == null) {
-      throw new Error(
-        `Could not verify remaining Shovels credits; refusing to ingest. Usage response keys: ${
-          usage.body && typeof usage.body === "object" ? Object.keys(usage.body).join(", ") : "non-object response"
-        }`,
-      );
-    }
-
-    const spendable = Math.max(0, remaining - reserve);
-    const effectiveLimit = Math.min(requestedLimit, spendable);
-
-    console.log(`Shovels credits: ${remaining}${limit == null ? "" : ` / ${limit}`} remaining`);
-    if (bodyState.used != null) console.log(`Rolling usage: ${bodyState.used} credits`);
-    console.log(`Protected reserve: ${reserve}`);
-    console.log(`Requested records: ${requestedLimit}`);
-
-    if (effectiveLimit < 1) {
-      throw new Error(`Sync refused: ${remaining} credits remain and ${reserve} are reserved.`);
-    }
-
-    if (effectiveLimit < requestedLimit) {
-      console.log(`Budget clamp: request reduced to ${effectiveLimit} records.`);
-    }
-
-    if (dryRun) {
-      console.log(`Dry run: sync is allowed for up to ${effectiveLimit} records; no permit query sent.`);
-      return;
-    }
+  if (remaining == null) {
+    const keys = usage.body && typeof usage.body === "object" && !Array.isArray(usage.body)
+      ? Object.keys(usage.body).join(", ")
+      : typeof usage.body;
+    throw new Error(`Could not verify remaining Shovels credits; refusing to ingest. Usage response keys: ${keys || "none"}`);
   }
 
-  const effectiveLimit = bodyState.unlimited
-    ? requestedLimit
-    : Math.min(requestedLimit, Math.max(0, remaining - reserve));
+  const spendable = Math.max(0, remaining - reserve);
+  const effectiveLimit = Math.min(requestedLimit, spendable);
+
+  console.log(`Shovels credits: ${remaining}${limit == null ? "" : ` / ${limit}`} remaining`);
+  if (parsedUsage.used != null) console.log(`Rolling usage: ${parsedUsage.used} credits`);
+  console.log(`Protected reserve: ${reserve}`);
+  console.log(`Requested records: ${requestedLimit}`);
+  console.log(`Geography: ${geoId}`);
+
+  if (effectiveLimit < 1) {
+    throw new Error(`Sync refused: ${remaining} credits remain and ${reserve} are reserved.`);
+  }
+
+  if (effectiveLimit < requestedLimit) {
+    console.log(`Budget clamp: request reduced to ${effectiveLimit} records.`);
+  }
+
+  if (dryRun) {
+    console.log(`Dry run: sync is allowed for up to ${effectiveLimit} records; no permit query sent.`);
+    return;
+  }
 
   const query = await shovelsGet(apiKey, "/permits/search", {
     geo_id: geoId,
