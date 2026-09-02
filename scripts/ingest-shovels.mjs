@@ -103,8 +103,14 @@ function publicPermit(permit) {
     id: permit?.id ?? permit?.permit_id ?? null,
     status: permit?.status ?? null,
     tags: Array.isArray(permit?.tags) ? permit.tags : [],
+    description: permit?.description_derived ?? permit?.description ?? null,
+    jurisdiction: permit?.jurisdiction ?? null,
+    propertyType: permit?.property_type ?? null,
     jobValue: permit?.job_value ?? null,
     contractorId: permit?.contractor_id ?? null,
+    approvalDuration: permit?.approval_duration ?? null,
+    constructionDuration: permit?.construction_duration ?? null,
+    inspectionPassRate: permit?.inspection_pass_rate ?? null,
     dates: {
       file: permit?.file_date ?? null,
       issue: permit?.issue_date ?? null,
@@ -158,6 +164,9 @@ async function main() {
   const reserve = integer("reserve", DEFAULT_RESERVE, 0, 1000000);
   const tags = values("tag");
   const dryRun = process.argv.includes("--dry-run");
+  const probe = process.argv.includes("--probe");
+
+  if (dryRun && probe) throw new Error("Use either --dry-run or --probe, not both.");
 
   const usage = await shovelsGet(apiKey, "/usage");
   const parsedUsage = usageBudget(usage.body);
@@ -172,20 +181,21 @@ async function main() {
   }
 
   const spendable = Math.max(0, remaining - reserve);
-  const effectiveLimit = Math.min(requestedLimit, spendable);
+  const targetLimit = probe ? 1 : requestedLimit;
+  const effectiveLimit = Math.min(targetLimit, spendable);
 
   console.log(`Shovels credits: ${remaining}${limit == null ? "" : ` / ${limit}`} remaining`);
   if (parsedUsage.used != null) console.log(`Rolling usage: ${parsedUsage.used} credits`);
   console.log(`Protected reserve: ${reserve}`);
   console.log(`Dataset: ${dataset}`);
   console.log(`Geography: ${geoId}`);
-  console.log(`Requested records: ${requestedLimit}`);
+  console.log(`Requested records: ${targetLimit}${probe ? " (probe mode)" : ""}`);
 
   if (effectiveLimit < 1) {
     throw new Error(`Sync refused: ${remaining} credits remain and ${reserve} are reserved.`);
   }
 
-  if (effectiveLimit < requestedLimit) {
+  if (!probe && effectiveLimit < requestedLimit) {
     console.log(`Budget clamp: request reduced to ${effectiveLimit} records.`);
   }
 
@@ -199,12 +209,22 @@ async function main() {
     permit_from: permitFrom,
     permit_to: permitTo,
     size: effectiveLimit,
+    include_count: probe ? true : undefined,
     permit_tags: tags,
   });
 
   const items = Array.isArray(query.body?.items) ? query.body.items : [];
   const consumed = headerInt(query.response, "X-Credits-Request") ?? items.length;
   const remainingAfter = headerInt(query.response, "X-Credits-Remaining");
+
+  if (probe) {
+    console.log(`Probe complete. Matching permit count: ${JSON.stringify(query.body?.total_count ?? null)}`);
+    console.log(`Records returned: ${items.length}`);
+    if (items[0]) console.log(`Representative record:\n${JSON.stringify(publicPermit(items[0]), null, 2)}`);
+    console.log(`Credits consumed: ${consumed}`);
+    if (remainingAfter != null) console.log(`Credits remaining: ${remainingAfter}`);
+    return;
+  }
 
   const datasetArtifact = {
     updatedAt: new Date().toISOString(),
