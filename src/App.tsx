@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { IncidentMap, type FirePerimeter } from "./IncidentMap";
 
 type Dataset = {
   updatedAt?: string;
@@ -8,6 +9,7 @@ type Dataset = {
     permitTo?: string;
   };
   permitCount?: number;
+  totalMatches?: number | null;
   permits?: unknown[];
 };
 
@@ -23,6 +25,7 @@ type IncidentArtifact = {
 };
 
 type Mode = "Impact" | "Recovery" | "Capacity";
+type LoadState = "loading" | "ready" | "missing";
 
 const INCIDENT = {
   slug: "plaskett-2026",
@@ -38,13 +41,27 @@ function formatWindow(dataset?: Dataset): string {
   return from && to ? `${from} → ${to}` : "Awaiting cached dataset";
 }
 
+function formatNumber(value?: number): string {
+  return value == null ? "—" : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatDate(value?: string): string {
+  if (!value) return INCIDENT.startedAt;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return INCIDENT.startedAt;
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
 export function App() {
   const [mode, setMode] = useState<Mode>("Impact");
   const [artifact, setArtifact] = useState<IncidentArtifact | null>(null);
-  const [snapshotState, setSnapshotState] = useState<"loading" | "ready" | "missing">("loading");
+  const [snapshotState, setSnapshotState] = useState<LoadState>("loading");
+  const [perimeter, setPerimeter] = useState<FirePerimeter | null>(null);
+  const [perimeterState, setPerimeterState] = useState<LoadState>("loading");
 
   useEffect(() => {
     let cancelled = false;
+
     fetch(`/api/incidents/${INCIDENT.slug}`)
       .then(async (response) => {
         if (!response.ok) throw new Error("missing");
@@ -59,6 +76,22 @@ export function App() {
         if (cancelled) return;
         setSnapshotState("missing");
       });
+
+    fetch(`/api/fire/perimeter?name=${encodeURIComponent("Plaskett")}`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error("missing");
+        return response.json() as Promise<FirePerimeter>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setPerimeter(data);
+        setPerimeterState("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPerimeterState("missing");
+      });
+
     return () => { cancelled = true; };
   }, []);
 
@@ -66,6 +99,9 @@ export function App() {
   const recovery = artifact?.shovels?.datasets?.recovery;
   const recoveryCount = recovery?.permitCount;
   const baselineCount = baseline?.permitCount;
+  const recoveryMatches = recovery?.totalMatches;
+  const acres = perimeter?.acres;
+  const containment = perimeter?.containmentPct;
 
   const recoveryLabel = recoveryCount === 0
     ? "No matching permits observed"
@@ -93,12 +129,12 @@ export function App() {
     }
 
     return [
-      { label: "Properties exposed", value: "—", note: "Next: perimeter × property geometry" },
-      { label: "Pre-fire permit sample", value: baselineCount == null ? "—" : String(baselineCount), note: formatWindow(baseline) },
-      { label: "Post-fire permit activity", value: recoveryCount == null ? "—" : String(recoveryCount), note: recoveryLabel },
-      { label: "Analysis geography", value: INCIDENT.geoId, note: "ZIP scope; polygon filter follows" },
+      { label: "Incident perimeter", value: acres == null ? "—" : `${formatNumber(acres)} ac`, note: perimeterState === "ready" ? "Live WFIGS perimeter metadata" : "Resolving perimeter" },
+      { label: "Containment", value: containment == null ? "—" : `${formatNumber(containment)}%`, note: perimeterState === "ready" ? "Reported with current perimeter" : "Awaiting WFIGS" },
+      { label: "Post-fire permit activity", value: recoveryCount == null ? "—" : String(recoveryCount), note: recoveryMatches != null ? `${formatNumber(recoveryMatches)} total matches in cached query` : recoveryLabel },
+      { label: "Built-world exposure", value: "NEXT", note: "Polygon × public structure/property layer" },
     ];
-  }, [baseline, baselineCount, mode, recovery, recoveryCount, recoveryLabel]);
+  }, [acres, baselineCount, containment, mode, perimeterState, recovery, recoveryCount, recoveryLabel, recoveryMatches]);
 
   return (
     <main className="shell">
@@ -112,20 +148,22 @@ export function App() {
 
       <section className="hero-grid">
         <article className="map-stage">
-          <div className="map-grid" />
+          <IncidentMap perimeter={perimeter} state={perimeterState} />
           <div className="map-copy">
             <span className="eyebrow">ACTIVE INCIDENT · {INCIDENT.county.toUpperCase()}</span>
-            <strong>{INCIDENT.name}</strong>
-            <p>Started {INCIDENT.startedAt}. Current analysis is intentionally narrow: ZIP {INCIDENT.geoId}, cached Shovels enrichment, and no request-time credit consumption.</p>
+            <strong>{perimeter?.name ?? INCIDENT.name}</strong>
+            <p>
+              Started {formatDate(perimeter?.discoveredAt)}. The perimeter is live from WFIGS; Shovels remains cached and credit-safe.
+              {acres != null ? ` ${formatNumber(acres)} acres are currently represented by the incident geometry.` : ""}
+            </p>
           </div>
-          <div className="crosshair" aria-hidden="true" />
         </article>
 
         <aside className="incident-card">
           <span className="eyebrow">OBSERVATION STATE</span>
-          <h2>{recoveryCount === 0 ? "Recovery signal has not appeared yet." : "Incident intelligence is coming online."}</h2>
+          <h2>{perimeterState === "ready" ? "The incident surface is live." : "Incident intelligence is coming online."}</h2>
           <ol>
-            <li><b>01</b><span><strong>Impact</strong>Resolve what exists inside the incident perimeter.</span></li>
+            <li><b>01</b><span><strong>Impact</strong>{perimeterState === "ready" ? "Authoritative perimeter geometry resolved; built-world intersection is next." : "Resolve what exists inside the incident perimeter."}</span></li>
             <li><b>02</b><span><strong>Recovery</strong>{recoveryLabel}. Absence is reported as observation, not fact.</span></li>
             <li><b>03</b><span><strong>Capacity</strong>Compare emerging rebuild demand against normal local throughput.</span></li>
           </ol>
@@ -152,13 +190,24 @@ export function App() {
       <section className="evidence-panel">
         <div>
           <span className="eyebrow">EVIDENCE MODE</span>
-          <strong>{snapshotState === "ready" ? "Cached Shovels snapshot loaded" : snapshotState === "loading" ? "Loading cached evidence…" : "No committed snapshot found yet"}</strong>
+          <strong>{mode === "Impact" && perimeterState === "ready" ? "Live WFIGS perimeter loaded" : snapshotState === "ready" ? "Cached Shovels snapshot loaded" : snapshotState === "loading" ? "Loading cached evidence…" : "No committed Shovels snapshot found yet"}</strong>
         </div>
         <div className="evidence-facts">
-          <span><b>Scope</b> ZIP {recovery?.query?.geoId ?? INCIDENT.geoId}</span>
-          <span><b>Recovery window</b> {formatWindow(recovery)}</span>
-          <span><b>Observed permits</b> {recoveryCount ?? "—"}</span>
-          <span><b>Interpretation</b> {recoveryCount === 0 ? "No matching records observed; not proof of no activity." : "Evidence is limited to the cached query."}</span>
+          {mode === "Impact" ? (
+            <>
+              <span><b>Source</b> WFIGS Interagency Perimeters Current</span>
+              <span><b>Incident ID</b> {perimeter?.id ?? "—"}</span>
+              <span><b>Perimeter acres</b> {formatNumber(acres)}</span>
+              <span><b>Interpretation</b> Perimeter overlap is exposure only; it does not assert structure damage.</span>
+            </>
+          ) : (
+            <>
+              <span><b>Scope</b> ZIP {recovery?.query?.geoId ?? INCIDENT.geoId}</span>
+              <span><b>Recovery window</b> {formatWindow(recovery)}</span>
+              <span><b>Observed permits</b> {recoveryCount ?? "—"}</span>
+              <span><b>Interpretation</b> {recoveryCount === 0 ? "No matching records observed; not proof of no activity." : "Evidence is limited to the cached query."}</span>
+            </>
+          )}
         </div>
       </section>
 
