@@ -6,8 +6,10 @@ export type FirePerimeter = {
   id: string;
   name: string;
   acres?: number;
+  reportedIncidentAcres?: number;
   containmentPct?: number;
   discoveredAt?: string;
+  perimeterUpdatedAt?: string;
   state?: string;
   geometry: Polygon | MultiPolygon;
   source: "wfigs";
