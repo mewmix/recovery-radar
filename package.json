@@ -3,12 +3,16 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.6"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "npm run build && vite preview",
-    "deploy": "wrangler deploy",
-    "check": "tsc --noEmit && vite build && wrangler deploy --dry-run"
+    "deploy": "npm run build && wrangler deploy",
+    "check": "tsc --noEmit && vite build && wrangler deploy --dry-run",
+    "ingest:shovels": "node --env-file=.dev.vars scripts/ingest-shovels.mjs"
   },
   "dependencies": {
     "@turf/boolean-point-in-polygon": "^7.2.0",
