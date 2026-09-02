@@ -1,7 +1,7 @@
 import type { FeatureCollection, MultiPolygon, Polygon } from "geojson";
 
-const WFIGS_CURRENT_PERIMETERS =
-  "https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query";
+const WFIGS_PERIMETERS =
+  "https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters/FeatureServer/0/query";
 
 interface WfigsProperties {
   poly_IncidentName?: string;
@@ -46,7 +46,7 @@ function normalized(value?: string): string {
 export async function findCurrentFirePerimeter(name: string): Promise<FirePerimeter | null> {
   const escaped = arcgisLiteral(name.trim());
   const where = `UPPER(poly_IncidentName) LIKE UPPER('%${escaped}%')`;
-  const url = new URL(WFIGS_CURRENT_PERIMETERS);
+  const url = new URL(WFIGS_PERIMETERS);
   url.searchParams.set("where", where);
   url.searchParams.set(
     "outFields",
@@ -64,6 +64,7 @@ export async function findCurrentFirePerimeter(name: string): Promise<FirePerime
     ].join(","),
   );
   url.searchParams.set("returnGeometry", "true");
+  url.searchParams.set("orderByFields", "poly_DateCurrent DESC");
   url.searchParams.set("resultRecordCount", "10");
   url.searchParams.set("outSR", "4326");
   url.searchParams.set("f", "geojson");
